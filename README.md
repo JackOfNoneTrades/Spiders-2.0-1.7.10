@@ -19,6 +19,8 @@ Differences from the original mod:
 * Better pathfinding and behavior.
 * Configurable spider fall damage protection.
 
+![screenshot1](images/screenshots/2026-09-21_20.28.11.png)
+
 ## Dependencies
 
 * [UniMixins](https://modrinth.com/mod/unimixins) [![curse](images/icons/curse.png)](https://www.curseforge.com/minecraft/mc-mods/unimixins) [![modrinth](images/icons/modrinth.png)](https://modrinth.com/mod/unimixins/versions) [![git](images/icons/git.png)](https://github.com/LegacyModdingMC/UniMixins/releases)
