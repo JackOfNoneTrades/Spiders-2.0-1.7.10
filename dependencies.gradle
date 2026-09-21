@@ -36,15 +36,15 @@
 
 dependencies {
     // Pure runtime
-    runtimeOnlyNonPublishable("com.github.GTNewHorizons:Hodgepodge:2.7.196:dev")
-    runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.130-GTNH:dev")
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:Hodgepodge:2.7.211:dev")
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.144-GTNH:dev")
     runtimeOnlyNonPublishable(rfg.deobf("curse.maven:catalogue-vintage-1465746:8384975")) // 1.0.8-1.7.10
-    runtimeOnlyNonPublishable("com.github.GTNewHorizons:Angelica:2.2.11:dev")
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:Angelica:2.2.17:dev")
     runtimeOnlyNonPublishable("dev.dediamondpro.resourcify:VintageResourcify:1.0.5:dev")
     runtimeOnlyNonPublishable("org.fentanylsolutions.vrap:vrap:1.0.1:dev")
     runtimeOnlyNonPublishable("com.falsepattern:forgelin-mc1.7.10:2.4.3-2.4.10")
 
-    runtimeOnlyNonPublishable("com.github.GTNewHorizons:ModularUI2:2.3.88-1.7.10:dev") // Required by VintageResourcify
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:ModularUI2:2.3.91-1.7.10:dev") // Required by VintageResourcify
 
     // Compile + runtime
 
