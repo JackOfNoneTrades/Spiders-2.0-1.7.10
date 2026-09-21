@@ -1,5 +1,7 @@
 # Spiders 2.0 1.7.10
 
+![Spiders 2.0 1.7.10](images/logo_small.png)
+
 A Minecraft 1.7.10 backport of [Spiders 2.0](https://github.com/Nyfaria/Spiders-2.0): spiders climb walls and ceilings and find paths around obstacles. Install on both client and server.
 
 [![hub](images/badges/github.png)](https://github.com/JackOfNoneTrades/Spiders-2.0-1.7.10/releases)
@@ -29,6 +31,7 @@ VERSION=0.1.0 ./gradlew build
 
 ## Credits
 
+* Logo by @kodesque.
 * TheCyberBrick for the original mod, and Nyfaria for maintaining [Spiders 2.0](https://github.com/Nyfaria/Spiders-2.0).
 * [GT:NH Example Mod](https://github.com/GTNewHorizons/ExampleMod1.7.10).
 
