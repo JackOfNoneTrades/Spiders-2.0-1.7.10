@@ -4,7 +4,6 @@ import java.nio.FloatBuffer;
 
 import net.minecraft.client.renderer.entity.RendererLivingEntity;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.monster.EntitySpider;
 import net.minecraft.util.MathHelper;
 
 import org.lwjgl.BufferUtils;
@@ -16,6 +15,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import tcb.spiderstpo.common.SurfaceFrame;
+import tcb.spiderstpo.common.Vec3d;
+import tcb.spiderstpo.common.entity.mob.ClimberRider;
 import tcb.spiderstpo.common.entity.mob.SpiderClimber;
 
 @Mixin(RendererLivingEntity.class)
@@ -31,18 +32,14 @@ public abstract class MixinRendererLivingEntity {
             target = "Lnet/minecraft/client/renderer/entity/RendererLivingEntity;rotateCorpse(Lnet/minecraft/entity/EntityLivingBase;FFF)V"))
     private void spiderstpo$orient(EntityLivingBase entity, double x, double y, double z, float yaw, float partialTicks,
         CallbackInfo ci) {
-        if (!(entity instanceof EntitySpider)) return;
-        SpiderClimber climber = SpiderClimber.get((EntitySpider) entity);
-        if (climber == null) return;
+        SpiderClimber riderMount = ClimberRider.getMount(entity);
+        SpiderClimber climber = riderMount != null ? riderMount : SpiderClimber.get(entity);
+        if (climber == null || !climber.isActive()) return;
         SurfaceFrame frame = climber.getRenderFrame(partialTicks);
-        double offset = climber.getVerticalOffset(partialTicks);
-        GL11.glTranslated(
-            climber.prevStickingOffsetX + (climber.stickingOffsetX - climber.prevStickingOffsetX) * partialTicks
-                - frame.up.x * offset,
-            climber.prevStickingOffsetY + (climber.stickingOffsetY - climber.prevStickingOffsetY) * partialTicks
-                - frame.up.y * offset,
-            climber.prevStickingOffsetZ + (climber.stickingOffsetZ - climber.prevStickingOffsetZ) * partialTicks
-                - frame.up.z * offset);
+        if (riderMount == null) {
+            Vec3d offset = climber.getRenderOffset(partialTicks);
+            GL11.glTranslated(offset.x, offset.y, offset.z);
+        }
         spiderstpo$rotationMatrix.clear();
         spiderstpo$rotationMatrix.put((float) frame.right.x)
             .put((float) frame.right.y)

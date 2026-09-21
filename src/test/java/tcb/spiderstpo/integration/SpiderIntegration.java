@@ -6,7 +6,9 @@ import java.nio.file.Paths;
 import java.util.UUID;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.entity.EntityList;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.monster.EntityCaveSpider;
 import net.minecraft.entity.monster.EntitySpider;
 import net.minecraft.entity.passive.EntityPig;
@@ -25,6 +27,7 @@ import net.minecraftforge.common.util.FakePlayer;
 
 import com.mojang.authlib.GameProfile;
 
+import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLServerStartedEvent;
 import tcb.spiderstpo.common.Config;
@@ -87,6 +90,17 @@ public class SpiderIntegration {
                 "subclass watcher slot retained");
             climb(subclass, "subclass");
             climb(new LargeSpider(world), "large subclass");
+            EntitySpider jockeyMount = new EntitySpider(world);
+            net.minecraft.entity.monster.EntitySkeleton skeleton = new net.minecraft.entity.monster.EntitySkeleton(
+                world);
+            skeleton.mountEntity(jockeyMount);
+            climb(jockeyMount, "vanilla skeleton jockey");
+            riderObstruction(jockeyMount, "vanilla skeleton");
+            riderArchery(jockeyMount);
+            riderDrop(jockeyMount, "vanilla skeleton");
+            skeleton.mountEntity(null);
+            SpeedIntegration.run(world);
+            if (Loader.isModLoaded("lotr")) LOTRIntegration.run(world);
             EntitySpider falling = new EntitySpider(world);
             falling.setPosition(30, 110, 0);
             falling.tasks.taskEntries.clear();
@@ -127,7 +141,7 @@ public class SpiderIntegration {
                     && !(disabled.getNavigator() instanceof AdvancedClimberPathNavigator),
                 "disabled config preserves vanilla");
             Config.enabled = true;
-            result = "PASS: vanilla identity/NBT, wall and ceiling navigation for spiders/cave spiders/subclasses, snow layers, platform pursuit and ceiling drops, 18 reported-layout pursuit cases, 48 platform attachment cases, rotation synchronization, poison, watcher compatibility, config disable";
+            result = "PASS: vanilla identity/NBT, wall and ceiling navigation for spiders/cave spiders/subclasses, snow layers, platform pursuit and ceiling drops, 18 reported-layout pursuit cases, 48 platform attachment cases, rotation synchronization, vanilla jockey health, ceiling drops, real head obstructions and ceiling archery, poison, watcher compatibility, config disable";
         } catch (Throwable failure) {
             failure.printStackTrace();
             result = "FAIL: " + failure;
@@ -138,10 +152,16 @@ public class SpiderIntegration {
             .initiateShutdown();
     }
 
-    private static void climb(EntitySpider entity, String label) {
+    static void climb(EntityCreature entity, String label) {
         entity.tasks.taskEntries.clear();
         entity.targetTasks.taskEntries.clear();
         entity.setPosition(2.5, 80, 0.5);
+        EntityLivingBase passenger = (EntityLivingBase) entity.riddenByEntity;
+        float riderHealth = passenger == null ? 0 : passenger.getHealth();
+        if (passenger instanceof EntityCreature) {
+            ((EntityCreature) passenger).tasks.taskEntries.clear();
+            ((EntityCreature) passenger).targetTasks.taskEntries.clear();
+        }
         int targetY = 87 - (int) Math.ceil(entity.height);
         boolean ceiling = false;
         double maxY = 0;
@@ -155,6 +175,16 @@ public class SpiderIntegration {
                     .setPath(path, 1);
             }
             tick(entity);
+            if (passenger != null) check(
+                passenger.getHealth() == riderHealth,
+                label + " rider takes no damage at tick="
+                    + tick
+                    + " pos="
+                    + entity.posX
+                    + ","
+                    + entity.posY
+                    + " health="
+                    + passenger.getHealth());
             SpiderClimber state = SpiderClimber.get(entity);
             maxY = Math.max(maxY, entity.posY);
             if (tick % 100 == 0) System.out.println(
@@ -179,6 +209,97 @@ public class SpiderIntegration {
             }
         }
         check(ceiling, label + " reaches and walks on ceiling; maxY=" + maxY);
+    }
+
+    static void riderDrop(EntityCreature mount, String label) {
+        riderDrop(mount, label, false);
+        climb(mount, label + " return to ceiling");
+        riderDrop(mount, label, true);
+    }
+
+    private static void riderDrop(EntityCreature mount, String label, boolean slowFall) {
+        mount.getNavigator()
+            .clearPathEntity();
+        mount.setMoveForward(0);
+        // Settle completely against the flat ceiling before beginning the departure.
+        for (int i = 0; i < 12; i++) tick(mount);
+        EntityLivingBase rider = (EntityLivingBase) mount.riddenByEntity;
+        float health = rider.getHealth();
+        SpiderClimber state = SpiderClimber.get(mount);
+        check(state.orientationNormal.y < -0.9, label + " drop starts upside down");
+        state.dropFromSurface();
+        // A slow fall must wait for space rather than turn the passenger into the roof.
+        for (int i = 0; slowFall && i < 12; i++) {
+            state.afterVanillaTravel();
+            mount.updateRiderPosition();
+            check(
+                mount.worldObj.func_147461_a(rider.boundingBox.contract(0.01, 0.01, 0.01))
+                    .isEmpty(),
+                label + " waits for clearance before righting");
+        }
+        check(state.orientationNormal.y < 0.9, label + " cannot stand rider upright against ceiling");
+        boolean landed = false;
+        for (int t = 0; t < 60; t++) {
+            Vec3d previous = state.orientationNormal;
+            tick(mount);
+            // Landing damage still follows the rider's normal fall rules.
+            if (mount.posY > 80.1)
+                check(rider.getHealth() == health, label + " ceiling drop rider takes no airborne damage tick=" + t);
+            check(
+                mount.worldObj.func_147461_a(rider.boundingBox.contract(0.01, 0.01, 0.01))
+                    .isEmpty(),
+                label + " ceiling drop rider clears blocks tick=" + t);
+            check(previous.dotProduct(state.orientationNormal) > 0.8, label + " ceiling drop turns smoothly tick=" + t);
+            if (mount.posY < 80.1 && mount.onGround && state.orientationNormal.y > 0.99) {
+                landed = true;
+                break;
+            }
+        }
+        check(landed, label + " ceiling drop lands upright");
+    }
+
+    static void riderArchery(EntityCreature mount) {
+        EntityLivingBase rider = (EntityLivingBase) mount.riddenByEntity;
+        EntityPig target = new EntityPig(mount.worldObj);
+        target.setPosition(2.5, 80, 2.5);
+        mount.worldObj.spawnEntityInWorld(target);
+        net.minecraft.entity.projectile.EntityArrow arrow = new net.minecraft.entity.projectile.EntityArrow(
+            mount.worldObj,
+            rider,
+            target,
+            1.6F,
+            0);
+        try {
+            check(rider.canEntityBeSeen(target), "ceiling jockey sees its target from the rotated head");
+            check(arrow.posY < 87 && arrow.posY > 80, "ceiling jockey arrow starts outside roof");
+            float health = target.getHealth();
+            for (int t = 0; t < 40 && !arrow.isDead; t++) arrow.onUpdate();
+            check(target.getHealth() < health, "ceiling jockey arrow hits its target");
+        } finally {
+            mount.worldObj.removeEntity(target);
+            arrow.setDead();
+        }
+    }
+
+    static void riderObstruction(EntityCreature mount, String label) {
+        Entity rider = mount.riddenByEntity;
+        mount.updateRiderPosition();
+        check(!rider.isEntityInsideOpaqueBlock(), label + " head clears ceiling");
+        SurfaceFrame frame = SpiderClimber.get(mount)
+            .getRenderFrame(1);
+        Vec3d head = frame.up.scale(rider.getEyeHeight())
+            .addVector(rider.posX, rider.posY, rider.posZ);
+        int x = net.minecraft.util.MathHelper.floor_double(head.x);
+        int y = net.minecraft.util.MathHelper.floor_double(head.y);
+        int z = net.minecraft.util.MathHelper.floor_double(head.z);
+        net.minecraft.block.Block previous = mount.worldObj.getBlock(x, y, z);
+        int metadata = mount.worldObj.getBlockMetadata(x, y, z);
+        try {
+            mount.worldObj.setBlock(x, y, z, Blocks.stone, 0, 2);
+            check(rider.isEntityInsideOpaqueBlock(), label + " real head obstruction still suffocates");
+        } finally {
+            mount.worldObj.setBlock(x, y, z, previous, metadata, 2);
+        }
     }
 
     private static void platform(WorldServer world) {
@@ -648,14 +769,18 @@ public class SpiderIntegration {
         }
     }
 
-    private static void tick(EntitySpider entity) {
+    static void tick(EntityCreature entity) {
         // World.updateEntityWithOptionalForce normally advances this before invoking onUpdate.
         // These isolated entities are ticked directly rather than inserted into the world's entity list.
         entity.ticksExisted++;
         entity.onUpdate();
+        if (entity.riddenByEntity != null) {
+            entity.riddenByEntity.ticksExisted++;
+            entity.riddenByEntity.updateRidden();
+        }
     }
 
-    private static void check(boolean value, String message) {
+    static void check(boolean value, String message) {
         if (!value) throw new AssertionError(message);
     }
 

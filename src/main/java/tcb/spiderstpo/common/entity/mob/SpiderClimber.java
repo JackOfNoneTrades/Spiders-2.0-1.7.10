@@ -1,11 +1,14 @@
 // Adapted from TheCyberBrick's Spiders 2.0 for Minecraft 1.7.10, 2026-09-21.
 package tcb.spiderstpo.common.entity.mob;
 
+import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.ai.attributes.IAttributeInstance;
-import net.minecraft.entity.monster.EntitySpider;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
 import net.minecraftforge.common.util.ForgeDirection;
@@ -13,15 +16,21 @@ import net.minecraftforge.common.util.ForgeDirection;
 import org.apache.commons.lang3.tuple.Pair;
 
 import tcb.spiderstpo.common.CollisionSmoothingUtil;
+import tcb.spiderstpo.common.Config;
 import tcb.spiderstpo.common.Matrix4f;
 import tcb.spiderstpo.common.SpiderDebug;
+import tcb.spiderstpo.common.SurfaceAttachment;
 import tcb.spiderstpo.common.SurfaceFrame;
 import tcb.spiderstpo.common.Vec3d;
+import tcb.spiderstpo.common.entity.movement.AdvancedClimberPathNavigator;
 
 public final class SpiderClimber {
 
-    public final EntitySpider entity;
+    public final EntityCreature entity;
     public final SpiderDebug debug;
+    private final float movementSpeedScale;
+    private final double defaultMovementSpeed;
+    private final boolean retainPlayerRidingControls;
     private Vec3d remoteNormal = new Vec3d(0, 1, 0);
     private double remoteOffsetX, remoteOffsetY, remoteOffsetZ;
     private Vec3d remoteForward = new Vec3d(0, 0, 1);
@@ -48,18 +57,31 @@ public final class SpiderClimber {
 
     protected boolean isTravelingInFluid = false;
     private int droppingTicks;
+    private boolean rightingWithRider;
 
     protected float collisionsInclusionRange = 2.0f;
     protected float collisionsSmoothingRange = 1.25f;
 
-    public SpiderClimber(EntitySpider entity) {
+    public SpiderClimber(EntityCreature entity) {
+        this(entity, 0.375F, false, 0.8);
+    }
+
+    public SpiderClimber(EntityCreature entity, float movementSpeedScale, boolean retainPlayerRidingControls,
+        double defaultMovementSpeed) {
         this.entity = entity;
+        this.movementSpeedScale = movementSpeedScale;
+        this.defaultMovementSpeed = defaultMovementSpeed;
+        this.retainPlayerRidingControls = retainPlayerRidingControls;
         debug = new SpiderDebug(entity);
         stickingOffsetY = prevStickingOffsetY = remoteOffsetY = entity.height / 2.0;
     }
 
-    public static SpiderClimber get(EntitySpider entity) {
-        return ((ClimberAccess) entity).spiderstpo$getClimber();
+    public static SpiderClimber get(Entity entity) {
+        return entity instanceof ClimberAccess ? ((ClimberAccess) entity).spiderstpo$getClimber() : null;
+    }
+
+    public boolean isActive() {
+        return !retainPlayerRidingControls || !(entity.riddenByEntity instanceof EntityPlayer);
     }
 
     public void receive(Vec3d normal, Vec3d forward, float headYaw, float pitch, double x, double y, double z) {
@@ -83,7 +105,7 @@ public final class SpiderClimber {
     }
 
     public void updateClientAngles() {
-        if (!receivedRenderState) return;
+        if (!receivedRenderState || !isActive()) return;
         // Vanilla's separate yaw/head packets describe a different surface frame until the next
         // climbing packet arrives. Render only the angles paired with our normal and body direction.
         entity.prevRenderYawOffset = entity.renderYawOffset = 0;
@@ -96,7 +118,10 @@ public final class SpiderClimber {
 
     public float getMovementSpeed() {
         IAttributeInstance attribute = entity.getEntityAttribute(SharedMonsterAttributes.movementSpeed);
-        return attribute != null ? (float) attribute.getAttributeValue() * 0.375F : 1.0f;
+        // Apply the configured baseline relative to the native one: size variants, subclass
+        // attributes and potion modifiers keep their existing relationships at default settings.
+        return (float) ((attribute != null ? attribute.getAttributeValue() * movementSpeedScale : 1.0)
+            * Config.getSpeedMultiplier(entity, defaultMovementSpeed));
     }
 
     private static double calculateXOffset(AxisAlignedBB aabb, AxisAlignedBB other, double offsetX) {
@@ -347,7 +372,64 @@ public final class SpiderClimber {
         return entity.height * 0.5F;
     }
 
+    public Vec3d getRenderOffset(float partialTicks) {
+        return new Vec3d(
+            prevStickingOffsetX + (stickingOffsetX - prevStickingOffsetX) * partialTicks,
+            prevStickingOffsetY + (stickingOffsetY - prevStickingOffsetY) * partialTicks,
+            prevStickingOffsetZ + (stickingOffsetZ - prevStickingOffsetZ) * partialTicks)
+                .subtract(getRenderFrame(partialTicks).up.scale(getVerticalOffset(partialTicks)));
+    }
+
+    public void resolveSpawnCollision() {
+        if (entity.worldObj.isRemote || !isActive() || entity.noClip) return;
+        AxisAlignedBB body = entity.boundingBox.contract(0.0001, 0.0001, 0.0001);
+        List<AxisAlignedBB> collisions = new ArrayList<>(entity.worldObj.func_147461_a(body));
+        if (collisions.isEmpty()) return;
+        Vec3d escape = null;
+        double shortest = Double.POSITIVE_INFINITY;
+        for (ForgeDirection side : ForgeDirection.VALID_DIRECTIONS) {
+            double distance = 0;
+            for (AxisAlignedBB block : collisions) {
+                double overlap = side.offsetX > 0 ? block.maxX - body.minX
+                    : side.offsetX < 0 ? body.maxX - block.minX
+                        : side.offsetY > 0 ? block.maxY - body.minY
+                            : side.offsetY < 0 ? body.maxY - block.minY
+                                : side.offsetZ > 0 ? block.maxZ - body.minZ : body.maxZ - block.minZ;
+                distance = Math.max(distance, overlap + 0.0002);
+            }
+            if (distance >= shortest || distance > Math.max(entity.width, entity.height) + 0.01) continue;
+            Vec3d offset = new Vec3d(side.offsetX, side.offsetY, side.offsetZ).scale(distance);
+            if (!entity.worldObj.func_147461_a(body.getOffsetBoundingBox(offset.x, offset.y, offset.z))
+                .isEmpty()) continue;
+            escape = offset;
+            shortest = distance;
+        }
+        if (escape != null) {
+            entity.setPosition(entity.posX + escape.x, entity.posY + escape.y, entity.posZ + escape.z);
+            debug.event("SPAWN_CLEARANCE offset=" + SpiderDebug.vector(escape));
+        }
+    }
+
+    private Vec3d climbEntryNormal(Vec3d normal) {
+        if (normal.y < 0.7 || !(entity.getNavigator() instanceof AdvancedClimberPathNavigator)) return normal;
+        ForgeDirection side = ((AdvancedClimberPathNavigator) entity.getNavigator()).getClimbEntrySide();
+        if (side == ForgeDirection.UNKNOWN) return normal;
+        AxisAlignedBB body = entity.boundingBox;
+        AxisAlignedBB probe = body.contract(0.001, 0.001, 0.001)
+            .addCoord(side.offsetX * 0.15, 0, side.offsetZ * 0.15);
+        if (entity.worldObj.func_147461_a(probe)
+            .isEmpty()) return normal;
+        Vec3d wallNormal = new Vec3d(-side.offsetX, 0, -side.offsetZ);
+        // A narrow pillar contributes little to the smoothed field beside a broad floor,
+        // especially for wide spiders. Once physically touching the route's wall, lean into
+        // the floor/wall transition so an upward waypoint does not project to sideways noise.
+        double lean = Math.max(0, normal.y - normal.dotProduct(wallNormal));
+        return normal.add(wallNormal.scale(lean))
+            .normalize();
+    }
+
     protected void updateOffsetsAndOrientation() {
+        Vec3d bodyForward = getRenderFrame(1).forward;
         Vec3d direction = this.getOrientation(1)
             .getDirection(entity.rotationYaw, entity.rotationPitch);
 
@@ -358,29 +440,37 @@ public final class SpiderClimber {
         double baseStickingOffsetZ = 0.0f;
         Vec3d baseOrientationNormal = new Vec3d(0, 1, 0);
 
-        if (!this.isTravelingInFluid && !isDropping() && entity.onGround && entity.ridingEntity == null) {
+        if (isActive() && !this.isTravelingInFluid && !isDropping() && entity.onGround && entity.ridingEntity == null) {
             Vec3d p = new Vec3d(entity.posX, entity.posY, entity.posZ);
 
             Vec3d s = p.addVector(0, entity.height / 2, 0);
+            // LOTR spiders can be nearly three blocks wide. Their body center is farther from
+            // the wall, so the smoothing neighborhood must grow with them to round an inside corner.
+            float collisionScale = Math.max(1, entity.width / 1.4F);
+            double inclusionRange = this.collisionsInclusionRange * collisionScale;
             AxisAlignedBB inclusionBox = AxisAlignedBB.getBoundingBox(s.x, s.y, s.z, s.x, s.y, s.z)
-                .expand(this.collisionsInclusionRange, this.collisionsInclusionRange, this.collisionsInclusionRange);
+                .expand(inclusionRange, inclusionRange, inclusionRange);
 
-            List<AxisAlignedBB> boxes = entity.worldObj.getCollidingBoundingBoxes(entity, inclusionBox);
+            // World reuses its collision list; the navigation/face probes below must not replace it.
+            List<AxisAlignedBB> boxes = new ArrayList<>(
+                entity.worldObj.getCollidingBoundingBoxes(entity, inclusionBox));
 
             Pair<Vec3d, Vec3d> attachmentPoint = CollisionSmoothingUtil
-                .findClosestPoint(boxes, this.collisionsSmoothingRange, 1.0f, 0.005f, 20, 0.05f, s);
+                .findClosestPoint(boxes, this.collisionsSmoothingRange * collisionScale, 1.0f, 0.005f, 20, 0.05f, s);
 
             debug.attachment(boxes.size(), attachmentPoint != null);
             if (attachmentPoint != null) {
-                isAttached = true;
-
-                this.attachedStickingOffsetX = MathHelper
-                    .clamp_double(attachmentPoint.getLeft().x - p.x, -entity.width / 2, entity.width / 2);
-                this.attachedStickingOffsetY = MathHelper
-                    .clamp_double(attachmentPoint.getLeft().y - p.y, 0, entity.height);
-                this.attachedStickingOffsetZ = MathHelper
-                    .clamp_double(attachmentPoint.getLeft().z - p.z, -entity.width / 2, entity.width / 2);
-                this.attachedOrientationNormal = attachmentPoint.getRight();
+                Vec3d normal = climbEntryNormal(attachmentPoint.getRight());
+                Vec3d contact = SurfaceAttachment.findContact(boxes, s, normal, inclusionRange * 2);
+                if (contact != null) {
+                    isAttached = true;
+                    Vec3d pivot = contact.subtract(p)
+                        .add(normal.scale(getVerticalOffset(1)));
+                    this.attachedStickingOffsetX = pivot.x;
+                    this.attachedStickingOffsetY = pivot.y;
+                    this.attachedStickingOffsetZ = pivot.z;
+                    this.attachedOrientationNormal = normal;
+                }
             }
         }
 
@@ -402,6 +492,25 @@ public final class SpiderClimber {
                 this.attachedOrientationNormal.subtract(baseOrientationNormal)
                     .scale(attachmentBlend))
             .normalize();
+
+        if (entity.riddenByEntity != null && isActive()) {
+            if (!isAttached && (isDropping() || attachedTicks <= 2) && prevOrientationNormal.y < 0.99)
+                rightingWithRider = true;
+            if (isAttached && orientationNormal.y < 0.7) rightingWithRider = false;
+            if (rightingWithRider) {
+                Vec3d target = isAttached ? orientationNormal : baseOrientationNormal;
+                Vec3d forward = bodyForward;
+                Vec3d next = SurfaceFrame.turnNormal(prevOrientationNormal, target, forward, Math.PI / 9);
+                if (ClimberRider.canTurn(this, next, forward)) orientationNormal = next;
+                else {
+                    orientationNormal = prevOrientationNormal;
+                    stickingOffsetX = prevStickingOffsetX;
+                    stickingOffsetY = prevStickingOffsetY;
+                    stickingOffsetZ = prevStickingOffsetZ;
+                }
+                if (orientationNormal.dotProduct(target) > 0.9999) rightingWithRider = false;
+            }
+        } else rightingWithRider = false;
 
         if (!isAttached) {
             this.attachedTicks = Math.max(0, this.attachedTicks - 1);
@@ -467,6 +576,7 @@ public final class SpiderClimber {
     }
 
     public boolean travel(float strafe, float forward) {
+        if (!isActive()) return false;
         isTravelingInFluid = entity.isInWater() || entity.handleLavaMovement();
         if (entity.worldObj.isRemote) {
             updateLimbSwing();

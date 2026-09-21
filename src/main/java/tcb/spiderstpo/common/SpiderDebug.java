@@ -4,8 +4,8 @@ import java.util.Locale;
 
 import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.monster.EntitySpider;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.pathfinding.PathEntity;
 import net.minecraft.pathfinding.PathPoint;
@@ -17,7 +17,7 @@ import tcb.spiderstpo.common.entity.mob.SpiderClimber;
 /** Server-side, opt-in diagnostics. No random draws or changes to AI decisions. */
 public final class SpiderDebug {
 
-    private final EntitySpider entity;
+    private final EntityCreature entity;
     private int nextStateTick, nextSearchTick;
     private int lastTarget = Integer.MIN_VALUE;
     private double lastX, lastY, lastZ;
@@ -25,7 +25,7 @@ public final class SpiderDebug {
     private Vec3d moveOffset, moveTangent;
     private String attachment = "not_sampled";
 
-    public SpiderDebug(EntitySpider entity) {
+    public SpiderDebug(EntityCreature entity) {
         this.entity = entity;
     }
 

@@ -5,7 +5,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.monster.EntitySpider;
 
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -38,8 +37,7 @@ public class ClientProxy extends CommonProxy {
         while ((message = pending.poll()) != null) {
             if (minecraft.theWorld == null || minecraft.theWorld.provider.dimensionId != message.dimension) continue;
             Entity entity = minecraft.theWorld.getEntityByID(message.entityId);
-            if (!(entity instanceof EntitySpider)) continue;
-            SpiderClimber climber = SpiderClimber.get((EntitySpider) entity);
+            SpiderClimber climber = SpiderClimber.get(entity);
             if (climber != null) climber.receive(
                 message.normal,
                 message.forward,

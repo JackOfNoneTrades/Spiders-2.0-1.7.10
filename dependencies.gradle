@@ -49,7 +49,9 @@ dependencies {
     // Compile + runtime
 
     // Pure compile
+    compileOnly(rfg.deobf("curse.maven:the-lord-of-the-rings-mod-legacy-423748:4091561")) // Optional LOTR Legacy 36.15 compatibility
 
     // Test
     testImplementation("junit:junit:4.13.2")
+    testCompileOnly(rfg.deobf("curse.maven:the-lord-of-the-rings-mod-legacy-423748:4091561"))
 }

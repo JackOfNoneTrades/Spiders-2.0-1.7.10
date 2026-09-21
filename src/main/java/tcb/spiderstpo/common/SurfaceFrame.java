@@ -31,9 +31,26 @@ public final class SurfaceFrame {
                 .add(cross(normal, before).scale(Math.sin(angle))));
     }
 
+    public static Vec3d turnNormal(Vec3d from, Vec3d to, Vec3d forward, double maxAngle) {
+        double dot = Math.max(-1, Math.min(1, from.dotProduct(to)));
+        double angle = Math.acos(dot);
+        if (angle <= maxAngle) return to;
+        Vec3d axis = dot < -0.99 ? tangent(forward, from) : cross(from, to).normalize();
+        if (axis.lengthVector() < 0.5) axis = tangent(new Vec3d(1, 0, 0), from);
+        return from.scale(Math.cos(maxAngle))
+            .add(cross(axis, from).scale(Math.sin(maxAngle)))
+            .normalize();
+    }
+
     private static Vec3d tangent(Vec3d direction, Vec3d normal) {
         return direction.subtract(normal.scale(direction.dotProduct(normal)))
             .normalize();
+    }
+
+    public Vec3d toWorld(double x, double y, double z) {
+        return right.scale(x)
+            .add(up.scale(y))
+            .add(forward.scale(z));
     }
 
     private static Vec3d cross(Vec3d a, Vec3d b) {

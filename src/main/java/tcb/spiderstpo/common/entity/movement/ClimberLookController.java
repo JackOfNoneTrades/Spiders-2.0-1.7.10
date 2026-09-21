@@ -2,9 +2,9 @@
 package tcb.spiderstpo.common.entity.movement;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.ai.EntityLookHelper;
-import net.minecraft.entity.monster.EntitySpider;
 import net.minecraft.util.MathHelper;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -14,7 +14,7 @@ import tcb.spiderstpo.common.entity.mob.SpiderClimber;
 
 public class ClimberLookController extends EntityLookHelper {
 
-    private final EntitySpider entity;
+    private final EntityCreature entity;
     private float deltaLookYaw;
     private float deltaLookPitch;
     private boolean isLooking;
@@ -22,7 +22,7 @@ public class ClimberLookController extends EntityLookHelper {
     private double posY;
     private double posZ;
 
-    public ClimberLookController(EntitySpider entity) {
+    public ClimberLookController(EntityCreature entity) {
         super(entity);
         this.entity = entity;
     }

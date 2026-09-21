@@ -45,6 +45,7 @@ public class ConfigGuiFactory implements IModGuiFactory {
             result.add(new ConfigElement<>(Config.configuration.getCategory("climbing")));
             result.add(new ConfigElement<>(Config.configuration.getCategory("pathfinding")));
             result.add(new ConfigElement<>(Config.configuration.getCategory("falling")));
+            result.add(new ConfigElement<>(Config.configuration.getCategory("movement")));
             return result;
         }
     }

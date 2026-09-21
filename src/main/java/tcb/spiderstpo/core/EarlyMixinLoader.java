@@ -22,6 +22,8 @@ public class EarlyMixinLoader implements IEarlyMixinLoader, IFMLLoadingPlugin {
     @Override
     public List<String> getMixins(Set<String> loadedCoreMods) {
         final List<String> mixins = new ArrayList<>();
+        mixins.add("minecraft.MixinEntity");
+        mixins.add("minecraft.MixinEntityArrow");
         mixins.add("minecraft.MixinEntitySpider");
         mixins.add("minecraft.MixinEntityLivingBase");
         if (FMLLaunchHandler.side()

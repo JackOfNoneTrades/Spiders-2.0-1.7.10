@@ -47,4 +47,41 @@ public class CustomPathFinderTest {
         assertEquals(4, path.get(path.size() - 1).x);
         assertEquals(9, path.size());
     }
+
+    @Test
+    public void keepsOppositeAttachmentsDistinctWhenRevisitingACell() {
+        CustomPathFinder.Surface surface = new CustomPathFinder.Surface() {
+
+            @Override
+            public int getSupportFaces(int x, int y, int z) {
+                if (z != 0) return 0;
+                if (x == 0 && y == 0) return 1 << 3;
+                if (x == 1 && y == 0) return 1 << 2 | 1 << 3;
+                if (x == 2 && y == 0) return 1;
+                if (x == 0 && y == 1) return 1 << 1;
+                if (x == 1 && y == 1) return 1 << 2;
+                return 0;
+            }
+
+            @Override
+            public boolean canMove(int x, int y, int z, int nx, int ny, int nz) {
+                return false;
+            }
+
+            @Override
+            public boolean canMove(int x, int y, int z, int face, int nx, int ny, int nz, int nextFace) {
+                if (x == 0 && y == 0 && face == 3)
+                    return nx == 1 && ny == 0 && nextFace == 3 || nx == 0 && ny == 1 && nextFace == 1;
+                if (x == 0 && y == 1) return nx == 1 && ny == 1 && nextFace == 2;
+                if (x == 1 && y == 1) return nx == 1 && ny == 0 && nextFace == 2;
+                return x == 1 && y == 0 && face == 2 && nx == 2 && ny == 0 && nextFace == 0;
+            }
+        };
+        List<CustomPathFinder.Node> path = new CustomPathFinder().find(surface, 0, 0, 0, 2, 0, 0, 8, 128, 3);
+        assertEquals(5, path.size());
+        assertEquals(1, path.get(1).y);
+        assertEquals(2, path.get(3).face);
+        assertEquals(2, path.get(4).x);
+    }
+
 }

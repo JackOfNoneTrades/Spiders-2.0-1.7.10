@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 
-/** Bounded A* over supported surface cells, including walls, ceilings and outside corners. */
+/** Bounded A* over (cell, attachment face), including walls, ceilings and outside corners. */
 public final class CustomPathFinder {
 
     public int examinedNodes;
@@ -17,6 +17,14 @@ public final class CustomPathFinder {
 
         boolean canMove(int x, int y, int z, int nx, int ny, int nz);
 
+        default int getSupportFaces(int x, int y, int z) {
+            return 1;
+        }
+
+        default boolean canMove(int x, int y, int z, int face, int nx, int ny, int nz, int nextFace) {
+            return canMove(x, y, z, nx, ny, nz);
+        }
+
         default int getDropY(int x, int y, int z) {
             return y;
         }
@@ -24,16 +32,13 @@ public final class CustomPathFinder {
 
     public static final class Node implements Comparable<Node> {
 
-        public final int x, y, z;
+        public final int x, y, z, face;
         public final boolean drop;
         private final double cost, estimate;
         private final Node previous;
 
-        Node(int x, int y, int z, double cost, double estimate, Node previous) {
-            this(x, y, z, cost, estimate, previous, false);
-        }
-
-        Node(int x, int y, int z, double cost, double estimate, Node previous, boolean drop) {
+        Node(int x, int y, int z, int face, double cost, double estimate, Node previous, boolean drop) {
+            this.face = face;
             this.x = x;
             this.y = y;
             this.z = z;
@@ -59,33 +64,49 @@ public final class CustomPathFinder {
     }
 
     public List<Node> find(Surface surface, int sx, int sy, int sz, int tx, int ty, int tz, int range, int budget) {
+        return find(surface, sx, sy, sz, tx, ty, tz, range, budget, -1);
+    }
+
+    public List<Node> find(Surface surface, int sx, int sy, int sz, int tx, int ty, int tz, int range, int budget,
+        int startFace) {
         examinedNodes = 0;
         PriorityQueue<Node> open = new PriorityQueue<>();
-        Map<Long, Node> visited = new HashMap<>();
-        Node start = new Node(sx, sy, sz, 0, distance(sx, sy, sz, tx, ty, tz), null), closest = start;
-        open.add(start);
-        visited.put(key(sx, sy, sz), start);
+        Map<Long, Node[]> visited = new HashMap<>();
+        int faces = surface.getSupportFaces(sx, sy, sz);
+        if (startFace >= 0 && (faces & 1 << startFace) != 0) faces = 1 << startFace;
+        if (faces == 0) faces = 1; // An airborne start may still descend onto a supported cell.
+        Node closest = null;
+        Node[] starts = new Node[6];
+        for (int face = 0; face < 6; face++) if ((faces & 1 << face) != 0) {
+            Node start = new Node(sx, sy, sz, face, 0, distance(sx, sy, sz, tx, ty, tz), null, false);
+            starts[face] = start;
+            open.add(start);
+            if (closest == null) closest = start;
+        }
+        visited.put(key(sx, sy, sz), starts);
         while (!open.isEmpty() && budget-- > 0) {
             examinedNodes++;
             Node node = open.poll();
-            if (visited.get(key(node.x, node.y, node.z)) != node) continue;
+            if (visited.get(key(node.x, node.y, node.z))[node.face] != node) continue;
             if (node.estimate < closest.estimate) closest = node;
             if (node.estimate == 0) break;
             int dropY = surface.getDropY(node.x, node.y, node.z);
             if (dropY < node.y && Math.abs(dropY - sy) <= range) {
                 long dropKey = key(node.x, dropY, node.z);
                 double cost = node.cost + node.y - dropY;
-                Node old = visited.get(dropKey);
+                Node[] arrivals = visited.computeIfAbsent(dropKey, ignored -> new Node[6]);
+                Node old = arrivals[0];
                 if (old == null || cost < old.cost) {
                     Node next = new Node(
                         node.x,
                         dropY,
                         node.z,
+                        0,
                         cost,
                         distance(node.x, dropY, node.z, tx, ty, tz),
                         node,
                         true);
-                    visited.put(dropKey, next);
+                    arrivals[0] = next;
                     open.add(next);
                 }
             }
@@ -95,16 +116,22 @@ public final class CustomPathFinder {
                 if (Math.abs(x - sx) > range || Math.abs(y - sy) > range || Math.abs(z - sz) > range) continue;
                 double cost = node.cost + Math.sqrt(dx * dx + dy * dy + dz * dz);
                 long key = key(x, y, z);
-                Node old = visited.get(key);
-                if (old != null && old.cost <= cost) continue;
-                if (!surface.canMove(node.x, node.y, node.z, x, y, z)) continue;
-                Node next = new Node(x, y, z, cost, distance(x, y, z, tx, ty, tz), node);
-                visited.put(key, next);
-                open.add(next);
+                int nextFaces = surface.getSupportFaces(x, y, z);
+                if (nextFaces == 0) continue;
+                Node[] arrivals = visited.computeIfAbsent(key, ignored -> new Node[6]);
+                for (int face = 0; face < 6; face++) {
+                    if ((nextFaces & 1 << face) == 0) continue;
+                    Node old = arrivals[face];
+                    if (old != null && old.cost <= cost) continue;
+                    if (!surface.canMove(node.x, node.y, node.z, node.face, x, y, z, face)) continue;
+                    Node next = new Node(x, y, z, face, cost, distance(x, y, z, tx, ty, tz), node, false);
+                    arrivals[face] = next;
+                    open.add(next);
+                }
             }
         }
         searchResult = closest.estimate == 0 ? "reached" : budget < 0 ? "budget_exhausted" : "no_more_nodes";
-        if (closest == start) return Collections.emptyList();
+        if (closest.previous == null) return Collections.emptyList();
         List<Node> result = new ArrayList<>();
         for (Node node = closest; node != null; node = node.previous) result.add(node);
         Collections.reverse(result);

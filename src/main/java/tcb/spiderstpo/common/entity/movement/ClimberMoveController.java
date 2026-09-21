@@ -1,8 +1,8 @@
 // Adapted from TheCyberBrick's Spiders 2.0 for Minecraft 1.7.10, 2026-09-21.
 package tcb.spiderstpo.common.entity.movement;
 
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.entity.ai.EntityMoveHelper;
-import net.minecraft.entity.monster.EntitySpider;
 import net.minecraft.util.MathHelper;
 
 import tcb.spiderstpo.common.Vec3d;
@@ -10,11 +10,11 @@ import tcb.spiderstpo.common.entity.mob.SpiderClimber;
 
 public class ClimberMoveController extends EntityMoveHelper {
 
-    private final EntitySpider climber;
+    private final EntityCreature climber;
     private double x, y, z, speed;
     private boolean updating;
 
-    public ClimberMoveController(EntitySpider climber) {
+    public ClimberMoveController(EntityCreature climber) {
         super(climber);
         this.climber = climber;
     }

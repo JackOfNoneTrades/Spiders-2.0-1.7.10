@@ -1,5 +1,7 @@
 package tcb.spiderstpo.common.entity.movement;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -7,7 +9,7 @@ import java.util.Map;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.monster.EntitySpider;
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
@@ -19,10 +21,10 @@ import tcb.spiderstpo.common.Config;
 public final class AdvancedWalkNodeProcessor implements CustomPathFinder.Surface {
 
     private final World world;
-    private final EntitySpider entity;
+    private final EntityCreature entity;
     private final Map<String, Integer> supported = new HashMap<>();
 
-    public AdvancedWalkNodeProcessor(EntitySpider entity) {
+    public AdvancedWalkNodeProcessor(EntityCreature entity) {
         this.entity = entity;
         this.world = entity.worldObj;
     }
@@ -70,6 +72,10 @@ public final class AdvancedWalkNodeProcessor implements CustomPathFinder.Surface
         return support(x, y, z) != 0;
     }
 
+    public int getSupportFaces(int x, int y, int z) {
+        return support(x, y, z);
+    }
+
     public boolean isClearCell(int x, int y, int z) {
         return clear(box(x, y, z));
     }
@@ -82,19 +88,74 @@ public final class AdvancedWalkNodeProcessor implements CustomPathFinder.Surface
         return false;
     }
 
-    private int supportFaces(AxisAlignedBB body, int x, int y, int z) {
+    private AxisAlignedBB faceBox(AxisAlignedBB body, double x, double y, double z, int face) {
         double width = Math.ceil(entity.width), height = Math.ceil(entity.height);
-        // Probe each face separately. Expanding all axes at once also accepts blocks touching only
-        // a corner of the grid cell, producing climbable columns of air alongside narrow pillars.
         // Bit order follows ForgeDirection: down, up, north, south, west, east.
+        // Tangential bounds use the real body, excluding corner-only block contacts.
+        switch (face) {
+            case 0:
+                return AxisAlignedBB.getBoundingBox(body.minX, y - 0.55, body.minZ, body.maxX, y + 0.001, body.maxZ);
+            case 1:
+                return AxisAlignedBB
+                    .getBoundingBox(body.minX, y + height - 0.001, body.minZ, body.maxX, y + height + 0.05, body.maxZ);
+            case 2:
+                return AxisAlignedBB.getBoundingBox(body.minX, body.minY, z - 0.05, body.maxX, body.maxY, z + 0.001);
+            case 3:
+                return AxisAlignedBB
+                    .getBoundingBox(body.minX, body.minY, z + width - 0.001, body.maxX, body.maxY, z + width + 0.05);
+            case 4:
+                return AxisAlignedBB.getBoundingBox(x - 0.05, body.minY, body.minZ, x + 0.001, body.maxY, body.maxZ);
+            default:
+                return AxisAlignedBB
+                    .getBoundingBox(x + width - 0.001, body.minY, body.minZ, x + width + 0.05, body.maxY, body.maxZ);
+        }
+    }
+
+    private int supportFaces(AxisAlignedBB body, int x, int y, int z) {
         int faces = 0;
-        if (collides(body.minX, y - 0.55, body.minZ, body.maxX, y + 0.001, body.maxZ)) faces |= 1;
-        if (collides(body.minX, y + height - 0.001, body.minZ, body.maxX, y + height + 0.05, body.maxZ)) faces |= 2;
-        if (collides(body.minX, body.minY, z - 0.05, body.maxX, body.maxY, z + 0.001)) faces |= 4;
-        if (collides(body.minX, body.minY, z + width - 0.001, body.maxX, body.maxY, z + width + 0.05)) faces |= 8;
-        if (collides(x - 0.05, body.minY, body.minZ, x + 0.001, body.maxY, body.maxZ)) faces |= 16;
-        if (collides(x + width - 0.001, body.minY, body.minZ, x + width + 0.05, body.maxY, body.maxZ)) faces |= 32;
+        for (int face = 0; face < 6; face++) {
+            AxisAlignedBB probe = faceBox(body, x, y, z, face);
+            if (collides(probe.minX, probe.minY, probe.minZ, probe.maxX, probe.maxY, probe.maxZ)) faces |= 1 << face;
+        }
         return faces;
+    }
+
+    private boolean continuousSupport(int x, int y, int z, int nx, int ny, int nz, int fromFace, int toFace) {
+        // Supported endpoints alone do not connect a wall to a nearby floating floor. Find
+        // the exact intervals of the sweep with face contact, so even a sub-block gap is rejected.
+        List<double[]> intervals = new ArrayList<>();
+        AxisAlignedBB body = box(x, y, z);
+        double dx = nx - x, dy = ny - y, dz = nz - z;
+        for (int face = 0; face < 6; face++) {
+            if (face != fromFace && face != toFace) continue;
+            AxisAlignedBB probe = faceBox(body, x, y, z, face);
+            for (Object value : world.func_147461_a(probe.addCoord(dx, dy, dz))) {
+                AxisAlignedBB block = (AxisAlignedBB) value;
+                if (block.maxX <= block.minX || block.maxY <= block.minY || block.maxZ <= block.minZ) continue;
+                double[] interval = { 0, 1 };
+                if (overlapInterval(probe.minX, probe.maxX, block.minX, block.maxX, dx, interval)
+                    && overlapInterval(probe.minY, probe.maxY, block.minY, block.maxY, dy, interval)
+                    && overlapInterval(probe.minZ, probe.maxZ, block.minZ, block.maxZ, dz, interval))
+                    intervals.add(interval);
+            }
+        }
+        intervals.sort(Comparator.comparingDouble(interval -> interval[0]));
+        double end = 0;
+        for (double[] interval : intervals) {
+            if (interval[0] > end + 1.0E-7) return false;
+            end = Math.max(end, interval[1]);
+            if (end >= 1) return true;
+        }
+        return false;
+    }
+
+    private static boolean overlapInterval(double min, double max, double blockMin, double blockMax, double motion,
+        double[] interval) {
+        if (motion == 0) return max > blockMin && min < blockMax;
+        double a = (blockMin - max) / motion, b = (blockMax - min) / motion;
+        interval[0] = Math.max(interval[0], Math.min(a, b));
+        interval[1] = Math.min(interval[1], Math.max(a, b));
+        return interval[0] < interval[1];
     }
 
     private static boolean connectedFaces(int from, int to) {
@@ -117,6 +178,17 @@ public final class AdvancedWalkNodeProcessor implements CustomPathFinder.Surface
         if (from == 0) return false;
         return cornerClear(x, y, z, nx, y, z, nx, ny, nz) || cornerClear(x, y, z, x, ny, z, nx, ny, nz)
             || cornerClear(x, y, z, x, y, nz, nx, ny, nz);
+    }
+
+    @Override
+    public boolean canMove(int x, int y, int z, int face, int nx, int ny, int nz, int nextFace) {
+        if (nextFace == (face ^ 1) || !canMove(x, y, z, nx, ny, nz)) return false;
+        if (support(x, y, z) == 0 || world.getBlock(x, y, z)
+            .getMaterial() == Material.water
+            || world.getBlock(nx, ny, nz)
+                .getMaterial() == Material.water)
+            return true;
+        return continuousSupport(x, y, z, nx, ny, nz, face, nextFace);
     }
 
     private boolean cornerClear(int x, int y, int z, int mx, int my, int mz, int nx, int ny, int nz) {

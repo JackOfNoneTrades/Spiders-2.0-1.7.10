@@ -3,7 +3,7 @@ package tcb.spiderstpo.common.entity.movement;
 import java.util.List;
 
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.monster.EntitySpider;
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.pathfinding.PathEntity;
 import net.minecraft.pathfinding.PathNavigate;
 import net.minecraft.pathfinding.PathPoint;
@@ -19,14 +19,14 @@ import tcb.spiderstpo.common.entity.mob.SpiderClimber;
 /** 1.7.10 navigation with progress measured in all three dimensions. */
 public class AdvancedClimberPathNavigator extends PathNavigate {
 
-    private final EntitySpider climber;
+    private final EntityCreature climber;
     private PathEntity path;
     private double speed;
     private int stuckTicks;
     private double lastX, lastY, lastZ;
     private boolean traceSearch;
 
-    public AdvancedClimberPathNavigator(EntitySpider entity, World world) {
+    public AdvancedClimberPathNavigator(EntityCreature entity, World world) {
         super(entity, world);
         climber = entity;
     }
@@ -52,7 +52,11 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
             MathHelper.floor_double(y),
             MathHelper.floor_double(z - Math.ceil(climber.width) / 2 + 0.5),
             Math.min(64, (int) getPathSearchRange()),
-            Config.pathSearchBudget);
+            Config.pathSearchBudget,
+            SpiderClimber.get(climber)
+                .getWalkingSide()
+                .getLeft()
+                .ordinal());
         if (traceSearch) SpiderClimber.get(climber).debug.event(
             "SEARCH requested=" + SpiderDebug.vector(x, y, z)
                 + " startCell="
@@ -75,7 +79,8 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
         PathPoint[] points = new PathPoint[nodes.size()];
         for (int i = 0; i < points.length; i++) {
             CustomPathFinder.Node node = nodes.get(i);
-            points[i] = node.drop ? new DropPoint(node.x, node.y, node.z) : new PathPoint(node.x, node.y, node.z);
+            points[i] = node.drop ? new DropPoint(node.x, node.y, node.z)
+                : new SurfacePoint(node.x, node.y, node.z, node.face);
         }
         return new PathEntity(points);
     }
@@ -160,7 +165,7 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
             clearPathEntity();
             return false;
         }
-        if (path == null || !next.isSamePath(path)) {
+        if (path == null || !sameSurfacePath(next, path)) {
             path = next;
             // The first node describes our current cell, not a waypoint to walk back to.
             if (path.getCurrentPathIndex() == 0 && path.getCurrentPathLength() > 1) path.incrementPathIndex();
@@ -168,6 +173,17 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
         }
         this.speed = speed;
         return !noPath();
+    }
+
+    private static boolean sameSurfacePath(PathEntity a, PathEntity b) {
+        if (!a.isSamePath(b)) return false;
+        for (int i = 0; i < a.getCurrentPathLength(); i++) {
+            PathPoint first = a.getPathPointFromIndex(i), second = b.getPathPointFromIndex(i);
+            if ((first instanceof DropPoint) != (second instanceof DropPoint)) return false;
+            if (first instanceof SurfacePoint && second instanceof SurfacePoint
+                && ((SurfacePoint) first).face != ((SurfacePoint) second).face) return false;
+        }
+        return true;
     }
 
     @Override
@@ -192,6 +208,11 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
 
     @Override
     public void onUpdateNavigation() {
+        if (!SpiderClimber.get(climber)
+            .isActive()) {
+            clearPathEntity();
+            return;
+        }
         if (noPath()) return;
         if (++stuckTicks >= 80) {
             if (climber.getDistanceSq(lastX, lastY, lastZ) < 0.04) {
@@ -224,9 +245,7 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
                     speed);
             return;
         }
-        ForgeDirection side = SpiderClimber.get(climber)
-            .getWalkingSide()
-            .getLeft();
+        ForgeDirection side = waypointSide(point);
         double x = point.xCoord + Math.ceil(climber.width) / 2
             + side.offsetX * (Math.ceil(climber.width) - climber.width) / 2;
         double y = waypointY(point);
@@ -245,18 +264,58 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
     private void onNextWaypoint() {
         PathPoint point = path.getPathPointFromIndex(path.getCurrentPathIndex());
         if (point instanceof DropPoint) return;
+        ForgeDirection side = waypointSide(point);
+        double padding = (Math.ceil(climber.width) - climber.width) / 2;
         climber.getMoveHelper()
             .setMoveTo(
-                point.xCoord + Math.ceil(climber.width) / 2,
+                point.xCoord + Math.ceil(climber.width) / 2 + side.offsetX * padding,
                 waypointY(point),
-                point.zCoord + Math.ceil(climber.width) / 2,
+                point.zCoord + Math.ceil(climber.width) / 2 + side.offsetZ * padding,
                 speed);
     }
 
-    private static final class DropPoint extends PathPoint {
+    public ForgeDirection getClimbEntrySide() {
+        if (noPath()) return ForgeDirection.UNKNOWN;
+        PathPoint point = path.getPathPointFromIndex(path.getCurrentPathIndex());
+        if (point instanceof DropPoint || point.yCoord <= climber.posY + 0.25) return ForgeDirection.UNKNOWN;
+        ForgeDirection side = waypointSide(point);
+        return side.offsetY == 0 ? side : ForgeDirection.UNKNOWN;
+    }
+
+    private ForgeDirection waypointSide(PathPoint point) {
+        if (point instanceof SurfacePoint) return ForgeDirection.getOrientation(((SurfacePoint) point).face);
+        ForgeDirection current = SpiderClimber.get(climber)
+            .getWalkingSide()
+            .getLeft();
+        int faces = new AdvancedWalkNodeProcessor(climber).getSupportFaces(point.xCoord, point.yCoord, point.zCoord);
+        if ((faces & 1 << current.ordinal()) != 0) return current;
+        // Align with the destination surface before turning upward. Wide spiders otherwise stop
+        // at the grid-cell center, beyond the wall's reach, and try to climb unsupported air.
+        for (ForgeDirection side : ForgeDirection.VALID_DIRECTIONS) {
+            if ((faces & 1 << side.ordinal()) != 0) return side;
+        }
+        return current;
+    }
+
+    private static class SurfacePoint extends PathPoint {
+
+        private final int face;
+
+        private SurfacePoint(int x, int y, int z, int face) {
+            super(x, y, z);
+            this.face = face;
+        }
+
+        @Override
+        public String toString() {
+            return super.toString() + "@" + ForgeDirection.getOrientation(face);
+        }
+    }
+
+    private static final class DropPoint extends SurfacePoint {
 
         private DropPoint(int x, int y, int z) {
-            super(x, y, z);
+            super(x, y, z, 0);
         }
     }
 
