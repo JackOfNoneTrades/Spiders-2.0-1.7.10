@@ -1,0 +1,21 @@
+[
+  {
+    "modid": "spiderstpo",
+    "name": "Spiders 2.0 1.7.10",
+    "description": "Spiders walk along walls and ceilings and navigate around obstacles. Minecraft 1.7.10 backport.",
+    "version": "${modVersion}",
+    "mcversion": "${minecraftVersion}",
+    "url": "https://github.com/JackOfNoneTrades/Spiders-2.0-1.7.10",
+    "authorList": [
+      "TheCyberBrick",
+      "Nyfaria",
+      "jack"
+    ],
+    "credits": "Original mod by TheCyberBrick; maintained by Nyfaria. 1.7.10 backport by jack.",
+    "logoFile": "assets/spiderstpo/icon.png",
+    "screenshots": [],
+    "dependencies": [
+      "unimixins"
+    ]
+  }
+]
