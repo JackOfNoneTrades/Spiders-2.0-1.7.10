@@ -4,6 +4,7 @@ import java.nio.FloatBuffer;
 
 import net.minecraft.client.renderer.entity.RendererLivingEntity;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.MathHelper;
 
 import org.lwjgl.BufferUtils;
@@ -25,6 +26,37 @@ public abstract class MixinRendererLivingEntity {
     @Unique
     private final FloatBuffer spiderstpo$rotationMatrix = BufferUtils.createFloatBuffer(16);
 
+    @Unique
+    private boolean spiderstpo$restorePlayer;
+    @Unique
+    private float spiderstpo$head, spiderstpo$prevHead, spiderstpo$body, spiderstpo$prevBody;
+
+    @Inject(method = "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", at = @At("HEAD"))
+    private void spiderstpo$playerLocalAngles(EntityLivingBase entity, double x, double y, double z, float yaw,
+        float partialTicks, CallbackInfo ci) {
+        SpiderClimber mount = ClimberRider.getMount(entity);
+        spiderstpo$restorePlayer = entity instanceof EntityPlayer && mount != null;
+        if (!spiderstpo$restorePlayer) return;
+        spiderstpo$head = entity.rotationYawHead;
+        spiderstpo$prevHead = entity.prevRotationYawHead;
+        spiderstpo$body = entity.renderYawOffset;
+        spiderstpo$prevBody = entity.prevRenderYawOffset;
+        entity.renderYawOffset = entity.prevRenderYawOffset = 0;
+        entity.rotationYawHead = entity.prevRotationYawHead = MathHelper
+            .wrapAngleTo180_float(entity.rotationYaw - mount.getRiderYaw(partialTicks));
+    }
+
+    @Inject(method = "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", at = @At("RETURN"))
+    private void spiderstpo$restorePlayerAngles(EntityLivingBase entity, double x, double y, double z, float yaw,
+        float partialTicks, CallbackInfo ci) {
+        if (!spiderstpo$restorePlayer) return;
+        entity.rotationYawHead = spiderstpo$head;
+        entity.prevRotationYawHead = spiderstpo$prevHead;
+        entity.renderYawOffset = spiderstpo$body;
+        entity.prevRenderYawOffset = spiderstpo$prevBody;
+        spiderstpo$restorePlayer = false;
+    }
+
     @Inject(
         method = "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V",
         at = @At(
@@ -36,6 +68,14 @@ public abstract class MixinRendererLivingEntity {
         SpiderClimber climber = riderMount != null ? riderMount : SpiderClimber.get(entity);
         if (climber == null || !climber.isActive()) return;
         SurfaceFrame frame = climber.getRenderFrame(partialTicks);
+        if (riderMount != null && entity instanceof EntityPlayer) {
+            // RenderPlayer subtracts yOffset along world Y before this hook. Move that offset
+            // into the rider's surface frame so the third-person body stays on the seat.
+            GL11.glTranslated(
+                -frame.up.x * entity.yOffset,
+                (1 - frame.up.y) * entity.yOffset,
+                -frame.up.z * entity.yOffset);
+        }
         if (riderMount == null) {
             Vec3d offset = climber.getRenderOffset(partialTicks);
             GL11.glTranslated(offset.x, offset.y, offset.z);

@@ -36,6 +36,222 @@ import tcb.spiderstpo.common.entity.movement.AdvancedWalkNodeProcessor;
 /** Optional runtime checks, loaded only when LOTR is in the development runtime. */
 public final class LOTRIntegration {
 
+    private static void playerRiding(WorldServer world, int scale) {
+        FakePlayer rider = new FakePlayer(
+            world,
+            new GameProfile(UUID.fromString("b1d05361-f8ad-4eec-9de0-9f46ce99c7b6"), "SpiderControls")) {
+
+            @Override
+            public void updateRidden() {
+                ridingEntity.updateRiderPosition();
+            }
+        };
+        lotr.common.LOTRLevelData.getData(rider)
+            .setAlignment(lotr.common.fac.LOTRFaction.MORDOR, 100);
+        LOTREntityMordorSpider spider = new LOTREntityMordorSpider(world);
+        spider.setSpiderScale(scale);
+        spider.setPosition(2.5, 80, 0.5);
+        tick(spider);
+        spider.tameNPC(rider);
+        spider.riddenByEntity = rider;
+        rider.ridingEntity = spider;
+        rider.rotationYaw = rider.prevRotationYaw = -90;
+        tick(spider);
+        SpiderClimber state = SpiderClimber.get(spider);
+        check(state.isPlayerControlled() && state.isActive(), "tamed player mount uses climbing movement");
+        check(
+            !lotr.common.entity.LOTRMountFunctions.isPlayerControlledMount(spider),
+            "LOTR position packets do not override surface movement");
+        boolean wall = false, ceiling = false;
+        double startX = spider.posX;
+        for (int t = 0; t < 240; t++) {
+            rider.setEntityActionState(0, 1, false, false);
+            tick(spider);
+            wall |= state.orientationNormal.x < -0.8;
+            ceiling |= state.orientationNormal.y < -0.8;
+            if (t % 20 == 0) System.out.println(
+                "PLAYER_RIDING t=" + t
+                    + " pos="
+                    + spider.posX
+                    + ","
+                    + spider.posY
+                    + ","
+                    + spider.posZ
+                    + " up="
+                    + state.orientationNormal.x
+                    + ","
+                    + state.orientationNormal.y
+                    + ","
+                    + state.orientationNormal.z);
+            if (ceiling && spider.posX < 6) break;
+        }
+        check(wall && ceiling, "W input climbs wall and crosses ceiling");
+        check(Math.abs(spider.posX - startX) > 1, "mounted input changes position");
+        check(
+            rider.ridingEntity == spider && rider.getHealth() == rider.getMaxHealth(),
+            "rider stays mounted and clear of blocks");
+        tcb.spiderstpo.common.SurfaceFrame view = tcb.spiderstpo.common.entity.mob.ClimberRider.getViewFrame(rider, 1);
+        check(view.up.y < -0.8, "player view turns upside down on ceiling");
+        check(
+            rider.getLook(1).yCoord * view.forward.y + rider.getLook(1).xCoord * view.forward.x
+                + rider.getLook(1).zCoord * view.forward.z > 0.999,
+            "aim matches rotated camera");
+        check(
+            spider.getSpiderClimbTime() > 0 && spider.shouldRenderClimbingMeter(),
+            "LOTR climbing stamina and meter retained");
+        cameraTurns(spider, rider, true);
+        spider.setSpiderClimbTime(99);
+        rider.setEntityActionState(0, 0, false, false);
+        tick(spider);
+        check(state.isDropping(), "exhausted player mount releases ceiling");
+        // Resume the same ceiling attachment to exercise an independent Space press.
+        for (int t = 0; t < 60; t++) {
+            rider.setEntityActionState(0, 0, false, false);
+            tick(spider);
+        }
+        check(spider.getSpiderClimbTime() == 0, "stamina recovers on floor");
+        spider.setPosition(5.5, 87 - spider.height, 0.5);
+        spider.motionX = spider.motionY = spider.motionZ = 0;
+        for (int t = 0; t < 15; t++) {
+            rider.setEntityActionState(0, 0, false, false);
+            tick(spider);
+        }
+        double dropY = spider.posY;
+        rider.setEntityActionState(0, 0, true, false);
+        tick(spider);
+        check(state.isDropping(), "Space starts ceiling drop");
+        for (int t = 0; t < 8; t++) {
+            rider.setEntityActionState(0, 0, true, false);
+            tick(spider);
+        }
+        check(spider.posY < dropY - 0.5, "holding Space does not restart drop each tick");
+        check(rider.getHealth() == rider.getMaxHealth(), "ceiling drop keeps player out of roof");
+        spider.riddenByEntity = null;
+        rider.ridingEntity = null;
+        if (scale == 1) playerGroundControls(world, rider);
+    }
+
+    private static void playerGroundControls(WorldServer world, FakePlayer rider) {
+        for (int x = 112; x <= 128; x++) for (int z = -8; z <= 8; z++)
+            for (int y = 79; y <= 83; y++) world.setBlock(x, y, z, y == 79 ? Blocks.stone : Blocks.air, 0, 2);
+        LOTREntityMordorSpider spider = new LOTREntityMordorSpider(world);
+        spider.setSpiderScale(1);
+        spider.tameNPC(rider);
+        spider.riddenByEntity = rider;
+        rider.ridingEntity = spider;
+        rider.rotationYaw = rider.prevRotationYaw = -90;
+        SpiderClimber state = SpiderClimber.get(spider);
+        for (int direction = 0; direction < 4; direction++) {
+            spider.setPosition(120.5, 80, 0.5);
+            spider.motionX = spider.motionY = spider.motionZ = 0;
+            tick(spider);
+            for (int t = 0; t < 20; t++) {
+                rider.setEntityActionState(
+                    direction == 2 ? 1 : direction == 3 ? -1 : 0,
+                    direction == 0 ? 1 : direction == 1 ? -1 : 0,
+                    false,
+                    false);
+                tick(spider);
+            }
+            if (direction == 0) check(spider.posX > 121.5, "W moves forward");
+            if (direction == 1) check(spider.posX < 120.2, "S moves backward");
+            if (direction == 2) check(spider.posZ > 1, "A strafes left");
+            if (direction == 3) check(spider.posZ < 0, "D strafes right");
+        }
+        rider.rotationYaw = rider.prevRotationYaw = 0;
+        for (int t = 0; t < 15; t++) {
+            rider.setEntityActionState(0, 1, false, false);
+            tick(spider);
+        }
+        check(state.getRenderFrame(1).forward.z > 0.9, "mouse yaw steers mount");
+        for (int t = 0; t < 10; t++) {
+            rider.setEntityActionState(0, 0, false, false);
+            tick(spider);
+        }
+        double x = spider.posX, z = spider.posZ;
+        for (int t = 0; t < 10; t++) {
+            rider.setEntityActionState(0, 0, false, false);
+            tick(spider);
+        }
+        check(spider.getDistanceSq(x, spider.posY, z) < 0.02, "releasing WASD stops mount");
+        tcb.spiderstpo.common.Vec3d serverEye = tcb.spiderstpo.common.entity.mob.ClimberRider.getEyePosition(rider);
+        rider.yOffset = 1.62F;
+        spider.updateRiderPosition();
+        check(
+            serverEye.subtract(tcb.spiderstpo.common.entity.mob.ClimberRider.getEyePosition(rider))
+                .lengthVector() < 0.001,
+            "client/server player eye offset agrees");
+        FakePlayer clientRider = new FakePlayer(world, new GameProfile(UUID.randomUUID(), "ClientEye")) {
+
+            @Override
+            public float getDefaultEyeHeight() {
+                return 0.12F;
+            }
+        };
+        clientRider.yOffset = 1.62F;
+        clientRider.ridingEntity = spider;
+        spider.riddenByEntity = clientRider;
+        spider.updateRiderPosition();
+        check(
+            serverEye.subtract(tcb.spiderstpo.common.entity.mob.ClimberRider.getEyePosition(clientRider))
+                .lengthVector() < 0.001,
+            "client default eye height matches server eye");
+        clientRider.ridingEntity = null;
+        spider.riddenByEntity = rider;
+        rider.yOffset = 0;
+        spider.setPosition(7.3, 83, 0.5);
+        spider.motionX = spider.motionY = spider.motionZ = 0;
+        for (int t = 0; t < 25; t++) {
+            rider.setEntityActionState(0, 0, false, false);
+            tick(spider);
+        }
+        check(state.orientationNormal.x < -0.8, "player mount attaches to wall");
+        cameraTurns(spider, rider, false);
+        double y = spider.posY;
+        rider.setEntityActionState(0, 0, true, false);
+        tick(spider);
+        check(state.isDropping(), "Space starts wall drop");
+        for (int t = 0; t < 8; t++) {
+            rider.setEntityActionState(0, 0, true, false);
+            tick(spider);
+        }
+        check(spider.posY < y - 0.5, "Space releases wall grip");
+        for (int xw = 118; xw <= 124; xw++) for (int zw = -2; zw <= 3; zw++)
+            for (int yw = 80; yw <= 81; yw++) world.setBlock(xw, yw, zw, Blocks.water, 0, 2);
+        spider.setPosition(120.5, 80.5, -1.5);
+        spider.motionX = spider.motionY = spider.motionZ = 0;
+        rider.rotationYaw = rider.prevRotationYaw = 0;
+        boolean inWater = false;
+        for (int t = 0; t < 25; t++) {
+            rider.setEntityActionState(0, 1, false, false);
+            tick(spider);
+            inWater |= spider.isInWater();
+        }
+        check(inWater && spider.posZ > -0.5, "mounted controls continue through water");
+        spider.riddenByEntity = null;
+        rider.ridingEntity = null;
+    }
+
+    private static void cameraTurns(LOTREntityMordorSpider spider, FakePlayer rider, boolean ceiling) {
+        SpiderClimber state = SpiderClimber.get(spider);
+        // Isolate camera movement from LOTR's intentional five-second stamina release.
+        spider.setSpiderClimbTime(0);
+        double y = spider.posY;
+        for (int t = 0; t < 60; t++) {
+            rider.rotationYaw += t % 2 == 0 ? 179 : -135;
+            rider.rotationPitch = t % 2 == 0 ? 89 : -89;
+            rider.setEntityActionState(0, 0, false, false);
+            tick(spider);
+            check(!state.isDropping(), "camera turns do not request a drop");
+            check(
+                ceiling ? state.orientationNormal.y < -0.8 : state.orientationNormal.x < -0.8,
+                "sharp camera turns preserve surface attachment");
+            check(Math.abs(spider.posY - y) < 0.3, "stationary camera turns do not make the mount fall");
+        }
+        check(rider.getHealth() == rider.getMaxHealth(), "turning player remains clear of blocks");
+        rider.rotationPitch = 0;
+    }
+
     private static void speeds(WorldServer world) {
         String[] saved = SpeedIntegration.property()
             .getStringList()
@@ -163,6 +379,7 @@ public final class LOTRIntegration {
     }
 
     public static void run(WorldServer world) throws Exception {
+        for (int scale = 1; scale <= 3; scale++) playerRiding(world, scale);
         speeds(world);
         reportedPillar(world, false);
         reportedPillar(world, true);
@@ -355,10 +572,55 @@ public final class LOTRIntegration {
             Config.fallDamage = false;
             LOTREntityMordorSpider immune = new LOTREntityMordorSpider(world);
             check(!immune.attackEntityFrom(DamageSource.fall, 2), "LOTR respects disabled fall damage");
+            playerFallDamage(world, fall);
         } finally {
             Config.fallDamage = original;
             Config.safeFallDistance = originalSafe;
             Config.maxDropHeight = originalDrop;
         }
+    }
+
+    private static void playerFallDamage(WorldServer world, Method fall) throws Exception {
+        FakePlayer rider = new FakePlayer(world, new GameProfile(UUID.randomUUID(), "SpiderFallRider")) {
+
+            @Override
+            public boolean isEntityInvulnerable() {
+                return false;
+            }
+        };
+        LOTREntityMordorSpider mount = new LOTREntityMordorSpider(world);
+        mount.setSpiderScale(1);
+        mount.tameNPC(rider);
+        mount.riddenByEntity = rider;
+        rider.ridingEntity = mount;
+        SpiderClimber.get(mount)
+            .setPlayerControlled(true);
+        Config.fallDamage = true;
+        Config.safeFallDistance = -1;
+        Config.maxDropHeight = 8;
+        fall.invoke(mount, 8F);
+        check(rider.getHealth() == rider.getMaxHealth(), "mounted player shares spider safe distance");
+        fall.invoke(mount, 9F);
+        check(rider.getHealth() == rider.getMaxHealth() - 1, "mounted player takes damage beyond safe distance");
+        rider.hurtResistantTime = 0;
+        Config.safeFallDistance = 12;
+        fall.invoke(rider, 12F);
+        check(rider.getHealth() == rider.getMaxHealth() - 1, "mounted player respects explicit safe distance");
+        Config.fallDamage = false;
+        fall.invoke(mount, 100F);
+        fall.invoke(rider, 100F);
+        check(rider.getHealth() == rider.getMaxHealth() - 1, "mounted player shares disabled fall damage");
+        mount.riddenByEntity = null;
+        rider.ridingEntity = null;
+        fall.invoke(rider, 4F);
+        check(rider.getHealth() == rider.getMaxHealth() - 2, "dismounted player retains normal fall damage");
+        rider.hurtResistantTime = 0;
+        EntityPig pig = new EntityPig(world);
+        pig.riddenByEntity = rider;
+        rider.ridingEntity = pig;
+        fall.invoke(pig, 4F);
+        check(rider.getHealth() == rider.getMaxHealth() - 3, "other mounts retain normal player fall damage");
+        pig.riddenByEntity = null;
+        rider.ridingEntity = null;
     }
 }

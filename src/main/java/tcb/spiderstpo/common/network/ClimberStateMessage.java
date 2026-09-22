@@ -13,7 +13,7 @@ public class ClimberStateMessage implements IMessage {
 
     public int entityId, dimension;
     public Vec3d normal, forward;
-    public float headYaw, pitch;
+    public float headYaw, pitch, riderYaw;
     public float x, y, z;
 
     public ClimberStateMessage() {}
@@ -27,6 +27,7 @@ public class ClimberStateMessage implements IMessage {
         headYaw = net.minecraft.util.MathHelper
             .wrapAngleTo180_float(state.entity.rotationYawHead - state.entity.renderYawOffset);
         pitch = state.entity.rotationPitch;
+        riderYaw = state.riderYaw;
         x = (float) state.stickingOffsetX;
         y = (float) state.stickingOffsetY;
         z = (float) state.stickingOffsetZ;
@@ -43,6 +44,7 @@ public class ClimberStateMessage implements IMessage {
         x = buffer.readFloat();
         y = buffer.readFloat();
         z = buffer.readFloat();
+        riderYaw = buffer.readFloat();
     }
 
     @Override
@@ -60,6 +62,7 @@ public class ClimberStateMessage implements IMessage {
         buffer.writeFloat(x);
         buffer.writeFloat(y);
         buffer.writeFloat(z);
+        buffer.writeFloat(riderYaw);
     }
 
     public static class Handler implements IMessageHandler<ClimberStateMessage, IMessage> {

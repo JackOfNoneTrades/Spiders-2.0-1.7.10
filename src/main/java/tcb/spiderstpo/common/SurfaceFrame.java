@@ -42,9 +42,35 @@ public final class SurfaceFrame {
             .normalize();
     }
 
+    /** Parallel transport preserves the rider's heading through wall and ceiling transitions. */
+    public static Vec3d transport(Vec3d direction, Vec3d fromUp, Vec3d toUp) {
+        double dot = Math.max(-1, Math.min(1, fromUp.dotProduct(toUp)));
+        Vec3d axis = cross(fromUp, toUp);
+        double sin = axis.lengthVector();
+        if (sin < 1.0E-6) return tangent(direction, toUp);
+        axis = axis.scale(1 / sin);
+        return tangent(
+            direction.scale(dot)
+                .add(cross(axis, direction).scale(sin))
+                .add(axis.scale(axis.dotProduct(direction) * (1 - dot))),
+            toUp);
+    }
+
     private static Vec3d tangent(Vec3d direction, Vec3d normal) {
         return direction.subtract(normal.scale(direction.dotProduct(normal)))
             .normalize();
+    }
+
+    /** Mouse yaw and pitch in this surface's coordinates; positive pitch looks down. */
+    public SurfaceFrame look(double yawDegrees, double pitchDegrees) {
+        double yaw = Math.toRadians(yawDegrees), pitch = Math.toRadians(pitchDegrees);
+        Vec3d heading = forward.scale(Math.cos(yaw))
+            .subtract(right.scale(Math.sin(yaw)));
+        return new SurfaceFrame(
+            up.scale(Math.cos(pitch))
+                .add(heading.scale(Math.sin(pitch))),
+            heading.scale(Math.cos(pitch))
+                .subtract(up.scale(Math.sin(pitch))));
     }
 
     public Vec3d toWorld(double x, double y, double z) {
@@ -53,7 +79,7 @@ public final class SurfaceFrame {
             .add(forward.scale(z));
     }
 
-    private static Vec3d cross(Vec3d a, Vec3d b) {
+    public static Vec3d cross(Vec3d a, Vec3d b) {
         return new Vec3d(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
     }
 }

@@ -1,6 +1,7 @@
 package tcb.spiderstpo.common.entity.mob;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
 
@@ -15,11 +16,38 @@ public final class ClimberRider {
         return mount != null && mount.isActive() && mount.entity.riddenByEntity == rider ? mount : null;
     }
 
+    public static SurfaceFrame getViewFrame(Entity player, float partialTicks) {
+        SpiderClimber mount = getMount(player);
+        if (mount == null || !(player instanceof EntityPlayer)) return null;
+        float yaw = player.prevRotationYaw
+            + MathHelper.wrapAngleTo180_float(player.rotationYaw - player.prevRotationYaw) * partialTicks;
+        float pitch = player.prevRotationPitch + (player.rotationPitch - player.prevRotationPitch) * partialTicks;
+        return mount.getRenderFrame(partialTicks)
+            .look(MathHelper.wrapAngleTo180_float(yaw - mount.getRiderYaw(partialTicks)), pitch);
+    }
+
+    private static double eyeOffset(Entity entity) {
+        if (!(entity instanceof EntityPlayer)) return entity.getEyeHeight();
+        EntityPlayer player = (EntityPlayer) entity;
+        // Forge's default eye height is 0.12 on client players and 1.62 on server players.
+        // Match EntityRenderer/getPosition while accounting for the rotated posY offset.
+        return 1.62F - player.yOffset + player.getEyeHeight() - player.getDefaultEyeHeight();
+    }
+
     public static Vec3d getEyePosition(Entity entity) {
+        return getEyePosition(entity, 1);
+    }
+
+    public static Vec3d getEyePosition(Entity entity, float partialTicks) {
         SpiderClimber mount = getMount(entity);
-        Vec3d up = mount == null ? new Vec3d(0, 1, 0) : mount.getRenderFrame(1).up;
-        return up.scale(entity.getEyeHeight())
-            .addVector(entity.posX, entity.posY, entity.posZ);
+        Vec3d up = mount == null ? new Vec3d(0, 1, 0) : mount.getRenderFrame(partialTicks).up;
+        // Client players store their eye-height offset in posY; server players store their feet.
+        double eye = eyeOffset(entity);
+        return up.scale(eye)
+            .addVector(
+                entity.prevPosX + (entity.posX - entity.prevPosX) * partialTicks,
+                entity.prevPosY + (entity.posY - entity.prevPosY) * partialTicks,
+                entity.prevPosZ + (entity.posZ - entity.prevPosZ) * partialTicks);
     }
 
     public static boolean updatePosition(Entity mount) {
@@ -73,7 +101,7 @@ public final class ClimberRider {
         SurfaceFrame frame = mount.getRenderFrame(1);
         for (int i = 0; i < 8; i++) {
             double x = ((i & 1) - 0.5) * rider.width * 0.8;
-            double y = rider.getEyeHeight() + (((i >> 1) & 1) - 0.5) * 0.1;
+            double y = eyeOffset(rider) + (((i >> 1) & 1) - 0.5) * 0.1;
             double z = (((i >> 2) & 1) - 0.5) * rider.width * 0.8;
             Vec3d sample = frame.toWorld(x, y, z)
                 .addVector(rider.posX, rider.posY, rider.posZ);

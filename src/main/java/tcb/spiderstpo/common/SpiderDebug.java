@@ -111,6 +111,8 @@ public final class SpiderDebug {
                 + entity.isInWater()
                 + " riding="
                 + (entity.ridingEntity != null)
+                + " playerControlled="
+                + climber.isPlayerControlled()
                 + " brightness="
                 + number(entity.getBrightness(1))
                 + " attachment={"

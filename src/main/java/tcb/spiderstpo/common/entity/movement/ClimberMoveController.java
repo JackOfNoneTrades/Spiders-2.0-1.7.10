@@ -40,6 +40,11 @@ public class ClimberMoveController extends EntityMoveHelper {
 
     @Override
     public void onUpdateMoveHelper() {
+        if (SpiderClimber.get(climber)
+            .isPlayerControlled()) {
+            updating = false;
+            return;
+        }
         climber.setMoveForward(0);
         if (!updating) return;
         updating = false;

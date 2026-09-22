@@ -23,11 +23,16 @@ public class EarlyMixinLoader implements IEarlyMixinLoader, IFMLLoadingPlugin {
     public List<String> getMixins(Set<String> loadedCoreMods) {
         final List<String> mixins = new ArrayList<>();
         mixins.add("minecraft.MixinEntity");
+        mixins.add("minecraft.MixinEntityPlayerMP");
         mixins.add("minecraft.MixinEntityArrow");
         mixins.add("minecraft.MixinEntitySpider");
         mixins.add("minecraft.MixinEntityLivingBase");
         if (FMLLaunchHandler.side()
-            .isClient()) mixins.add("minecraft.MixinRendererLivingEntity");
+            .isClient()) {
+            mixins.add("minecraft.MixinRendererLivingEntity");
+            mixins.add("minecraft.MixinEntityRenderer");
+            mixins.add("minecraft.MixinEntityPlayerCamera");
+        }
 
         return mixins;
     }

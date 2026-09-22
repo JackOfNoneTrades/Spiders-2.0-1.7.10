@@ -45,7 +45,8 @@ public class ClientProxy extends CommonProxy {
                 message.pitch,
                 message.x,
                 message.y,
-                message.z);
+                message.z,
+                message.riderYaw);
         }
     }
 }

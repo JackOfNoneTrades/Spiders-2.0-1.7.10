@@ -1,5 +1,6 @@
 package tcb.spiderstpo.core;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -17,7 +18,8 @@ public class LateMixinLoader implements ILateMixinLoader {
 
     @Override
     public List<String> getMixins(Set<String> loadedMods) {
-        return loadedMods.contains("lotr") ? Collections.singletonList("lotr.MixinLOTREntitySpiderBase")
+        return loadedMods.contains("lotr")
+            ? Arrays.asList("lotr.MixinLOTREntitySpiderBase", "lotr.MixinLOTRMountFunctions")
             : Collections.emptyList();
     }
 }

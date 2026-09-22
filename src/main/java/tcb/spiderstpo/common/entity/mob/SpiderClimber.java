@@ -30,7 +30,7 @@ public final class SpiderClimber {
     public final SpiderDebug debug;
     private final float movementSpeedScale;
     private final double defaultMovementSpeed;
-    private final boolean retainPlayerRidingControls;
+    private final boolean supportsPlayerControl;
     private Vec3d remoteNormal = new Vec3d(0, 1, 0);
     private double remoteOffsetX, remoteOffsetY, remoteOffsetZ;
     private Vec3d remoteForward = new Vec3d(0, 0, 1);
@@ -58,6 +58,12 @@ public final class SpiderClimber {
     protected boolean isTravelingInFluid = false;
     private int droppingTicks;
     private boolean rightingWithRider;
+    private boolean playerControlled, riderInitialized, jumpHeld, dropRequested;
+    private float riderStrafe, riderForward;
+    public float riderYaw;
+    private float prevRiderYaw, remoteRiderYaw;
+    private int riderInputTick;
+    private Entity controllingPlayer;
 
     protected float collisionsInclusionRange = 2.0f;
     protected float collisionsSmoothingRange = 1.25f;
@@ -66,12 +72,12 @@ public final class SpiderClimber {
         this(entity, 0.375F, false, 0.8);
     }
 
-    public SpiderClimber(EntityCreature entity, float movementSpeedScale, boolean retainPlayerRidingControls,
+    public SpiderClimber(EntityCreature entity, float movementSpeedScale, boolean supportsPlayerControl,
         double defaultMovementSpeed) {
         this.entity = entity;
         this.movementSpeedScale = movementSpeedScale;
         this.defaultMovementSpeed = defaultMovementSpeed;
-        this.retainPlayerRidingControls = retainPlayerRidingControls;
+        this.supportsPlayerControl = supportsPlayerControl;
         debug = new SpiderDebug(entity);
         stickingOffsetY = prevStickingOffsetY = remoteOffsetY = entity.height / 2.0;
     }
@@ -81,10 +87,81 @@ public final class SpiderClimber {
     }
 
     public boolean isActive() {
-        return !retainPlayerRidingControls || !(entity.riddenByEntity instanceof EntityPlayer);
+        return !supportsPlayerControl || !(entity.riddenByEntity instanceof EntityPlayer) || isPlayerControlled();
     }
 
-    public void receive(Vec3d normal, Vec3d forward, float headYaw, float pitch, double x, double y, double z) {
+    public boolean isPlayerControlled() {
+        return playerControlled && entity.riddenByEntity instanceof EntityPlayer;
+    }
+
+    public float getRiderYaw(float partialTicks) {
+        return entity.worldObj.isRemote
+            ? prevRiderYaw + MathHelper.wrapAngleTo180_float(riderYaw - prevRiderYaw) * partialTicks
+            : riderYaw;
+    }
+
+    public void setPlayerControlled(boolean controlled) {
+        playerControlled = controlled;
+        if (!controlled || controllingPlayer != entity.riddenByEntity) {
+            controllingPlayer = entity.riddenByEntity;
+            riderInitialized = false;
+            riderStrafe = riderForward = 0;
+            jumpHeld = dropRequested = false;
+        }
+    }
+
+    public void riderInput(EntityPlayer player, float strafe, float forward, boolean jump) {
+        if (!isPlayerControlled() || entity.riddenByEntity != player) return;
+        riderStrafe = Float.isFinite(strafe) ? MathHelper.clamp_float(strafe, -1, 1) : 0;
+        riderForward = Float.isFinite(forward) ? MathHelper.clamp_float(forward, -1, 1) : 0;
+        dropRequested |= jump && !jumpHeld;
+        jumpHeld = jump;
+        riderInputTick = entity.ticksExisted;
+    }
+
+    public float getRiderStrafe() {
+        return isDropping() ? 0 : riderStrafe * 0.5F;
+    }
+
+    public float getRiderForward() {
+        return isDropping() ? 0 : riderForward * (riderForward < 0 ? 0.25F : 1);
+    }
+
+    private void prepareRiderMovement() {
+        EntityPlayer rider = (EntityPlayer) entity.riddenByEntity;
+        if (!Float.isFinite(rider.rotationYaw)) return;
+        if (!riderInitialized) {
+            riderYaw = rider.rotationYaw;
+            entity.rotationYaw = getOrientation(1)
+                .getRotation(new Vec3d(-Math.sin(Math.toRadians(riderYaw)), 0, Math.cos(Math.toRadians(riderYaw))))
+                .getLeft();
+            riderInitialized = true;
+        } else entity.rotationYaw += MathHelper.wrapAngleTo180_float(rider.rotationYaw - riderYaw);
+        riderYaw = rider.rotationYaw;
+        entity.rotationPitch = 0;
+        entity.rotationYawHead = entity.renderYawOffset = entity.rotationYaw;
+        entity.setAIMoveSpeed(getMovementSpeed());
+        if (dropRequested && orientationNormal.y < 0.7) {
+            debug.event("MOUNT_DROP reason=jump");
+            dropFromSurface();
+        }
+        dropRequested = false;
+        if (entity.ticksExisted - riderInputTick > 10) riderStrafe = riderForward = 0;
+        if (entity.ticksExisted % 20 == 0 && debug.enabled()) debug.event(
+            "RIDER_INPUT strafe=" + riderStrafe
+                + " forward="
+                + riderForward
+                + " jump="
+                + jumpHeld
+                + " yaw="
+                + rider.rotationYaw
+                + " pitch="
+                + rider.rotationPitch);
+    }
+
+    public void receive(Vec3d normal, Vec3d forward, float headYaw, float pitch, double x, double y, double z,
+        float riderYaw) {
+        remoteRiderYaw = riderYaw;
         remoteNormal = normal;
         remoteForward = forward;
         remoteHeadYaw = headYaw;
@@ -518,6 +595,8 @@ public final class SpiderClimber {
             this.attachedTicks = Math.min(5, this.attachedTicks + 1);
         }
 
+        if (isPlayerControlled())
+            direction = SurfaceFrame.transport(direction, prevOrientationNormal, orientationNormal);
         Pair<Float, Float> newRotations = this.getOrientation(1)
             .getRotation(direction);
 
@@ -584,6 +663,8 @@ public final class SpiderClimber {
             prevStickingOffsetX = stickingOffsetX;
             prevStickingOffsetY = stickingOffsetY;
             prevStickingOffsetZ = stickingOffsetZ;
+            prevRiderYaw = riderYaw;
+            riderYaw = remoteRiderYaw;
             prevRenderForward = renderForward;
             renderForward = remoteForward;
             orientationNormal = remoteNormal;
@@ -591,6 +672,11 @@ public final class SpiderClimber {
             stickingOffsetY = remoteOffsetY;
             stickingOffsetZ = remoteOffsetZ;
             return true;
+        }
+        if (isPlayerControlled()) {
+            prepareRiderMovement();
+            strafe = getRiderStrafe() * getMovementSpeed();
+            forward = getRiderForward() * getMovementSpeed();
         }
         if (isDropping()) {
             droppingTicks--;
@@ -617,14 +703,23 @@ public final class SpiderClimber {
 
         Vec3d stickingForce = this.getStickingForce(walkingSide);
 
-        if (forward != 0) {
+        // AI supplies only forward speed. Player input also supplies sideways/backward movement.
+        float inputMagnitude = MathHelper.sqrt_float(strafe * strafe + forward * forward);
+        if (inputMagnitude > 0) {
+            Vec3d right = SurfaceFrame.cross(upVector, forwardVector);
+            forwardVector = forwardVector.scale(forward)
+                .subtract(right.scale(strafe))
+                .normalize();
+            forward = Math.min(getMovementSpeed(), inputMagnitude);
+            if (!isPlayerControlled()) forward = inputMagnitude;
             float slipperiness = 0.91f;
 
             if (entity.onGround) {
                 slipperiness = this.getSurfaceSlipperiness(walkingSide.getLeft());
             }
 
-            float friction = forward * 0.16277136F / (slipperiness * slipperiness * slipperiness);
+            float friction = (isPlayerControlled() ? getMovementSpeed() : forward) * 0.16277136F
+                / (slipperiness * slipperiness * slipperiness);
 
             float f = forward * forward;
             if (f >= 1.0E-4F) {

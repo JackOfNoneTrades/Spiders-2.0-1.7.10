@@ -74,7 +74,7 @@ public final class Config {
             "fall_damage",
             "falling",
             true,
-            "Allow improved spiders to take damage from falls beyond their safe distance. Default: true.",
+            "Allow improved spiders and their mounted players to take damage from falls beyond their safe distance. Default: true.",
             "spiderstpo.config.fall_damage");
         safeFallDistance = configuration.getInt(
             "safe_fall_distance",
@@ -82,7 +82,7 @@ public final class Config {
             -1,
             -1,
             256,
-            "Blocks spiders can fall without damage. -1 follows max_drop_height; otherwise overrides it. Each extra block deals one damage point (half a heart), rounded up, with normal potion and damage modifiers.",
+            "Blocks spiders and their mounted players can fall without damage. -1 follows max_drop_height; otherwise overrides it. Each extra block deals one damage point (half a heart), rounded up, with normal potion and damage modifiers.",
             "spiderstpo.config.safe_fall_distance");
         pathSearchBudget = configuration.getInt(
             "path_search_budget",

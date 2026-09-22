@@ -55,6 +55,11 @@ public class ClimberLookController extends EntityLookHelper {
 
     @Override
     public void onUpdateLook() {
+        if (SpiderClimber.get(entity)
+            .isPlayerControlled()) {
+            isLooking = false;
+            return;
+        }
         this.entity.rotationPitch = 0.0F;
 
         if (this.isLooking) {

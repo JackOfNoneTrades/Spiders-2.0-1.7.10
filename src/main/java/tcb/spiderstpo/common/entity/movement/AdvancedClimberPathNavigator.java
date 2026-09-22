@@ -209,7 +209,8 @@ public class AdvancedClimberPathNavigator extends PathNavigate {
     @Override
     public void onUpdateNavigation() {
         if (!SpiderClimber.get(climber)
-            .isActive()) {
+            .isActive() || SpiderClimber.get(climber)
+                .isPlayerControlled()) {
             clearPathEntity();
             return;
         }

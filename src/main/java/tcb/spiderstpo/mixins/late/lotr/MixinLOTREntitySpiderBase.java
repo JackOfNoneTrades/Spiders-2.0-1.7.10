@@ -9,6 +9,7 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -33,6 +34,43 @@ public abstract class MixinLOTREntitySpiderBase extends LOTREntityNPCRideable im
     private SpiderClimber spiderstpo$climber;
     @Unique
     private float spiderstpo$lastScale = -1;
+
+    @Shadow(remap = false)
+    public abstract int getSpiderClimbTime();
+
+    @Shadow(remap = false)
+    public abstract void setSpiderClimbTime(int ticks);
+
+    @Unique
+    private int spiderstpo$previousClimbTime;
+
+    @Inject(method = "onLivingUpdate", at = @At("HEAD"))
+    private void spiderstpo$rememberStamina(CallbackInfo ci) {
+        spiderstpo$previousClimbTime = getSpiderClimbTime();
+    }
+
+    @Inject(method = "onLivingUpdate", at = @At("RETURN"))
+    private void spiderstpo$mountedStamina(CallbackInfo ci) {
+        if (worldObj.isRemote || spiderstpo$climber == null || !spiderstpo$climber.isPlayerControlled()) return;
+        // Surface travel marks wall/ceiling contact as onGround; LOTR normally interprets that
+        // as resting. Preserve its 100-tick climbing limit using the actual attachment normal.
+        boolean climbing = spiderstpo$climber.orientationNormal.y < 0.7;
+        int ticks = onGround && !climbing && !spiderstpo$climber.isDropping() ? 0
+            : climbing ? Math.min(100, spiderstpo$previousClimbTime + 1) : spiderstpo$previousClimbTime;
+        setSpiderClimbTime(ticks);
+        if (ticks >= 100 && climbing && !spiderstpo$climber.isDropping()) {
+            spiderstpo$climber.debug.event("MOUNT_DROP reason=stamina climbTicks=" + ticks);
+            spiderstpo$climber.dropFromSurface();
+        }
+        if (ticksExisted % 20 == 0 && spiderstpo$climber.debug.enabled())
+            spiderstpo$climber.debug.event("MOUNT_STAMINA climbTicks=" + ticks + " climbing=" + climbing);
+    }
+
+    @Inject(method = "shouldRenderClimbingMeter", at = @At("HEAD"), cancellable = true, remap = false)
+    private void spiderstpo$climbingMeter(CallbackInfoReturnable<Boolean> cir) {
+        if (spiderstpo$climber != null && spiderstpo$climber.isPlayerControlled())
+            cir.setReturnValue(getSpiderClimbTime() > 0 && spiderstpo$climber.orientationNormal.y < 0.7);
+    }
 
     protected MixinLOTREntitySpiderBase(World world) {
         super(world);
@@ -73,8 +111,11 @@ public abstract class MixinLOTREntitySpiderBase extends LOTREntityNPCRideable im
         }
         if (spiderstpo$climber.isActive()) stepHeight = 0.1F;
         if (!spiderstpo$climber.travel(strafe, forward)) {
-            // Preserve LOTR's mount controls, including its climbing stamina.
-            super.moveEntityWithHeading(strafe, forward);
+            // Controlled drops/fluids use vanilla gravity without LOTR's client position control.
+            if (spiderstpo$climber.isPlayerControlled()) super.super_moveEntityWithHeading(
+                spiderstpo$climber.getRiderStrafe(),
+                spiderstpo$climber.getRiderForward());
+            else super.moveEntityWithHeading(strafe, forward);
             spiderstpo$climber.afterVanillaTravel();
         }
     }
@@ -106,6 +147,8 @@ public abstract class MixinLOTREntitySpiderBase extends LOTREntityNPCRideable im
 
     @Override
     public void onUpdate() {
+        if (spiderstpo$climber != null) spiderstpo$climber
+            .setPlayerControlled(isNPCTamed() && riddenByEntity instanceof net.minecraft.entity.player.EntityPlayer);
         if (spiderstpo$climber != null && spiderstpo$climber.isActive() && getNPCScale() != spiderstpo$lastScale) {
             // LOTR normally applies its scale after movement and the suffocation check. Resolve
             // the full-sized body against the spawn face before either can run.
