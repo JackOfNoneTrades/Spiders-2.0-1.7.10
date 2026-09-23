@@ -1,5 +1,6 @@
 package org.fentanylsolutions.nimblespiders.common.entity.movement;
 
+import net.minecraft.entity.EntityCreature;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.ai.EntityAIBase;
 import net.minecraft.entity.ai.EntityAIHurtByTarget;
@@ -10,7 +11,6 @@ import net.minecraft.entity.ai.EntityAISwimming;
 import net.minecraft.entity.ai.EntityAIWander;
 import net.minecraft.entity.ai.EntityAIWatchClosest;
 import net.minecraft.entity.monster.EntityIronGolem;
-import net.minecraft.entity.monster.EntitySpider;
 import net.minecraft.entity.player.EntityPlayer;
 
 import org.fentanylsolutions.nimblespiders.common.SpiderDebug;
@@ -19,9 +19,9 @@ import org.fentanylsolutions.nimblespiders.common.entity.mob.SpiderClimber;
 /** Vanilla spider behavior expressed through the task AI used by surface navigation. */
 public final class SpiderAI {
 
-    private final EntitySpider entity;
+    private final EntityCreature entity;
 
-    public SpiderAI(EntitySpider entity) {
+    public SpiderAI(EntityCreature entity) {
         this.entity = entity;
         entity.tasks.addTask(1, new EntityAISwimming(entity));
         entity.tasks.addTask(3, new EntityAILeapAtTarget(entity, 0.4F) {

@@ -102,6 +102,7 @@ public class SpiderIntegration {
             skeleton.mountEntity(null);
             SpeedIntegration.run(world);
             if (Loader.isModLoaded("lotr")) LOTRIntegration.run(world);
+            if (Loader.isModLoaded("abyssalcraft")) AbyssalCraftIntegration.run(world);
             EntitySpider falling = new EntitySpider(world);
             falling.setPosition(30, 110, 0);
             falling.tasks.taskEntries.clear();

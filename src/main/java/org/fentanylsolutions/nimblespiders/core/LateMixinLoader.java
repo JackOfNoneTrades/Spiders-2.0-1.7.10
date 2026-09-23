@@ -1,7 +1,6 @@
 package org.fentanylsolutions.nimblespiders.core;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -18,8 +17,12 @@ public class LateMixinLoader implements ILateMixinLoader {
 
     @Override
     public List<String> getMixins(Set<String> loadedMods) {
-        return loadedMods.contains("lotr")
-            ? Arrays.asList("lotr.MixinLOTREntitySpiderBase", "lotr.MixinLOTRMountFunctions")
-            : Collections.emptyList();
+        final List<String> mixins = new ArrayList<>();
+        if (loadedMods.contains("lotr")) {
+            mixins.add("lotr.MixinLOTREntitySpiderBase");
+            mixins.add("lotr.MixinLOTRMountFunctions");
+        }
+        if (loadedMods.contains("abyssalcraft")) mixins.add("abyssalcraft.MixinEntityAntiSpider");
+        return mixins;
     }
 }

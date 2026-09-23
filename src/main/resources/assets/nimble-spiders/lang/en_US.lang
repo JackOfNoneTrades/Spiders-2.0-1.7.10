@@ -21,4 +21,4 @@ nimble-spiders.config.safe_fall_distance.tooltip=Blocks spiders and their mounte
 nimble-spiders.config.movement=Movement
 nimble-spiders.config.movement.tooltip=Set per-spider movement speeds. Server settings govern gameplay.
 nimble-spiders.config.spider_speeds=Spider speeds
-nimble-spiders.config.spider_speeds.tooltip=Entity ID or Java class name:speed. Defaults: vanilla 0.8, LOTR 0.35. Higher values move faster; size differences and potion modifiers are preserved. Full/simple class names and inherited entries are supported. Most specific class wins; full class name overrides entity ID. Values: 0 to 1024. Changes apply immediately.
+nimble-spiders.config.spider_speeds.tooltip=Entity ID or Java class name:speed. Defaults: vanilla and AbyssalCraft 0.8, LOTR 0.35. Higher values move faster; size differences and potion modifiers are preserved. Full/simple class names and inherited entries are supported. Most specific class wins; full class name overrides entity ID. Values: 0 to 1024. Changes apply immediately.

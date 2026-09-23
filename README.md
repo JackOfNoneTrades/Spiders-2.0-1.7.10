@@ -20,6 +20,7 @@ Differences from the original mod:
 * Configurable spider fall damage protection.
 * Configurable spider speed.
 * LOTR spiders compat.
+* AbyssalCraft Anti-Spider compat.
 
 ![screenshot1](images/screenshots/2026-09-21_20.28.11.png)
 

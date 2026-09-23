@@ -25,7 +25,7 @@ public final class Config {
     public static boolean fallDamage = true;
     public static int safeFallDistance = -1;
     private static final String[] DEFAULT_SPIDER_SPEEDS = { "Spider:0.8", "CaveSpider:0.8", "lotr.MirkwoodSpider:0.35",
-        "lotr.MordorSpider:0.35", "lotr.UtumnoIceSpider:0.35" };
+        "lotr.MordorSpider:0.35", "lotr.UtumnoIceSpider:0.35", "abyssalcraft.antispider:0.8" };
     private static volatile Map<String, Double> spiderSpeeds = parseSpeeds(DEFAULT_SPIDER_SPEEDS);
     private static Set<String> excludedClasses = new HashSet<>();
 
@@ -59,7 +59,7 @@ public final class Config {
                 "movement",
                 "spider_speeds",
                 DEFAULT_SPIDER_SPEEDS,
-                "Baseline movement speeds as entity ID or Java class name:speed. Defaults: vanilla 0.8, LOTR 0.35. Higher values make spiders faster. LOTR size differences, attribute modifiers and vanilla's climbing speed conversion are preserved. Accepts full or simple class names; the nearest matching class wins, with full class name before entity ID before simple class name. Subclasses inherit entries. Duplicate keys use the last value. Values must be finite, between 0 and 1024; invalid entries are ignored. Changes apply immediately to existing improved spiders. Server settings govern gameplay.")
+                "Baseline movement speeds as entity ID or Java class name:speed. Defaults: vanilla and AbyssalCraft 0.8, LOTR 0.35. Higher values make spiders faster. LOTR size differences, attribute modifiers and vanilla's climbing speed conversion are preserved. Accepts full or simple class names; the nearest matching class wins, with full class name before entity ID before simple class name. Subclasses inherit entries. Duplicate keys use the last value. Values must be finite, between 0 and 1024; invalid entries are ignored. Changes apply immediately to existing improved spiders. Server settings govern gameplay.")
                 .setLanguageKey("nimble-spiders.config.spider_speeds")
                 .getStringList());
         maxDropHeight = configuration.getInt(
