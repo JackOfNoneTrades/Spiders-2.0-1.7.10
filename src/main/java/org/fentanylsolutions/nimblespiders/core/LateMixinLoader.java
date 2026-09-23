@@ -23,6 +23,10 @@ public class LateMixinLoader implements ILateMixinLoader {
             mixins.add("lotr.MixinLOTRMountFunctions");
         }
         if (loadedMods.contains("abyssalcraft")) mixins.add("abyssalcraft.MixinEntityAntiSpider");
+        if (loadedMods.contains("mod_Invasion")) {
+            mixins.add("invasion.MixinEntityIMSpider");
+            mixins.add("invasion.MixinIMMoveHelper");
+        }
         return mixins;
     }
 }

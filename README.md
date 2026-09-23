@@ -21,6 +21,7 @@ Differences from the original mod:
 * Configurable spider speed.
 * LOTR spiders compat.
 * AbyssalCraft Anti-Spider compat.
+* Invasion Mod spiders compat.
 
 ![screenshot1](images/screenshots/2026-09-21_20.28.11.png)
 
