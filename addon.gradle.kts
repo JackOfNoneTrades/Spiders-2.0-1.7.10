@@ -22,3 +22,13 @@ if (providers.gradleProperty("spiderIntegration").isPresent) {
         }
     }
 }
+
+tasks.withType<JavaExec>().configureEach {
+    if (name.startsWith("runServer")) {
+        // Angelica is client-only and crashes dedicated servers. Strip it right before launch
+        // (GTNH setup appends classpath later).
+        doFirst("stripClientOnlyMods") {
+            classpath = classpath.filter { !it.name.contains("angelica", ignoreCase = true) }
+        }
+    }
+}
