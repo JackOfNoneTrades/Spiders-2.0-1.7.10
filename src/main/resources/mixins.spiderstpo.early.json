@@ -1,8 +1,0 @@
-{
-  "required": true,
-  "minVersion": "0.8.7-GTNH",
-  "package": "tcb.spiderstpo.mixins.early",
-  "refmap": "mixins.spiderstpo.refmap.json",
-  "target": "@env(DEFAULT)",
-  "compatibilityLevel": "JAVA_8"
-}

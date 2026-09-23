@@ -10,7 +10,7 @@ if (providers.gradleProperty("spiderIntegration").isPresent) {
     tasks.named<JavaExec>("runServer") {
         dependsOn(tasks.named("testClasses"))
         classpath(testSources.output)
-        systemProperty("spiderstpo.integration", "true")
+        systemProperty("nimble-spiders.integration", "true")
         doFirst {
             java.io.File((this as JavaExec).workingDir, "spiders-integration-result.txt").delete()
         }
