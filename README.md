@@ -4,13 +4,13 @@
 
 A Minecraft 1.7.10 backport of [Spiders 2.0](https://github.com/Nyfaria/Spiders-2.0): spiders climb walls and ceilings and find paths around obstacles. Install on both client and server.
 
-[![hub](images/badges/github.png)](https://github.com/JackOfNoneTrades/nimble-spiders/releases)
+[![curse](images/badges/curse.png)](https://www.curseforge.com/minecraft/mc-mods/nimble-spiders)
 [![67](images/badges/67.png)](https://67.fentanylsolutions.org/mod/nimble-spiders)
+[![hub](images/badges/github.png)](https://github.com/JackOfNoneTrades/nimble-spiders/releases)
 [![maven](images/badges/maven.png)](https://maven.fentanylsolutions.org/#/releases/org/fentanylsolutions/nimblespiders/NimbleSpiders)
 ![forge](images/badges/forge.png)
 [![cord](images/badges/cord.png)](https://discord.gg/xAWCqGrguG)
 
-<!-- [![curse](images/badges/curse.png)](https://www.curseforge.com/minecraft/mc-mods/nimble-spiders) -->
 <!-- [![modrinth](images/badges/modrinth.png)](https://modrinth.com/mod/nimble-spiders) -->
 <!-- [![mcmod.cn](images/badges/mcmodcn.png)](https://www.mcmod.cn/class/PROJECT_ID.html) -->
 
