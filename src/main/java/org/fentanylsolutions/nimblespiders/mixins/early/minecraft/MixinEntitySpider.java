@@ -38,10 +38,12 @@ public abstract class MixinEntitySpider extends EntityMob implements ClimberAcce
         setSize(0.95F, 0.85F);
         stepHeight = 0.1F;
         nimblespiders$climber = new SpiderClimber(spider);
-        moveHelper = new ClimberMoveController(spider);
-        lookHelper = new ClimberLookController(spider);
-        navigator = new AdvancedClimberPathNavigator(spider, world);
+        AccessorEntityLiving access = (AccessorEntityLiving) spider;
+        access.setMoveHelper(new ClimberMoveController(spider));
+        access.setLookHelper(new ClimberLookController(spider));
+        AdvancedClimberPathNavigator navigator = new AdvancedClimberPathNavigator(spider, world);
         navigator.setCanSwim(true);
+        access.setNavigator(navigator);
         new SpiderAI(spider);
     }
 

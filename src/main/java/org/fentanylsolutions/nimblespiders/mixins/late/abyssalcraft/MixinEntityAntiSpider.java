@@ -12,6 +12,7 @@ import org.fentanylsolutions.nimblespiders.common.entity.movement.ClimberLookCon
 import org.fentanylsolutions.nimblespiders.common.entity.movement.ClimberMoveController;
 import org.fentanylsolutions.nimblespiders.common.entity.movement.SpiderAI;
 import org.fentanylsolutions.nimblespiders.common.network.ClimberNetwork;
+import org.fentanylsolutions.nimblespiders.mixins.early.minecraft.AccessorEntityLiving;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -39,10 +40,12 @@ public abstract class MixinEntityAntiSpider extends EntityMob implements Climber
         setSize(0.95F, 0.85F);
         stepHeight = 0.1F;
         nimblespiders$climber = new SpiderClimber(this);
-        moveHelper = new ClimberMoveController(this);
-        lookHelper = new ClimberLookController(this);
-        navigator = new AdvancedClimberPathNavigator(this, world);
+        AccessorEntityLiving access = (AccessorEntityLiving) this;
+        access.setMoveHelper(new ClimberMoveController(this));
+        access.setLookHelper(new ClimberLookController(this));
+        AdvancedClimberPathNavigator navigator = new AdvancedClimberPathNavigator(this, world);
         navigator.setCanSwim(true);
+        access.setNavigator(navigator);
         new SpiderAI(this);
     }
 

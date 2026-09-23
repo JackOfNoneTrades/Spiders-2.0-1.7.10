@@ -16,6 +16,7 @@ import org.fentanylsolutions.nimblespiders.common.entity.movement.ClimberLeapAtT
 import org.fentanylsolutions.nimblespiders.common.entity.movement.ClimberLookController;
 import org.fentanylsolutions.nimblespiders.common.entity.movement.ClimberMoveController;
 import org.fentanylsolutions.nimblespiders.common.network.ClimberNetwork;
+import org.fentanylsolutions.nimblespiders.mixins.early.minecraft.AccessorEntityLiving;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -82,12 +83,13 @@ public abstract class MixinLOTREntitySpiderBase extends LOTREntityNPCRideable im
         // LOTR retains its own size scaling, faction targets, combat and hired NPC tasks.
         // NPC attributes already use task-AI speed units; vanilla spiders need a legacy conversion.
         nimblespiders$climber = new SpiderClimber(this, 1.0F, true, 0.35);
-        moveHelper = new ClimberMoveController(this);
-        lookHelper = new ClimberLookController(this);
-        boolean avoidsWater = navigator.getAvoidsWater();
-        navigator = new AdvancedClimberPathNavigator(this, world);
-        navigator.setAvoidsWater(avoidsWater);
+        AccessorEntityLiving access = (AccessorEntityLiving) this;
+        access.setMoveHelper(new ClimberMoveController(this));
+        access.setLookHelper(new ClimberLookController(this));
+        AdvancedClimberPathNavigator navigator = new AdvancedClimberPathNavigator(this, world);
+        navigator.setAvoidsWater(getNavigator().getAvoidsWater());
         navigator.setCanSwim(true);
+        access.setNavigator(navigator);
         stepHeight = 0.1F;
         for (Object value : new ArrayList<>(tasks.taskEntries)) {
             EntityAITasks.EntityAITaskEntry entry = (EntityAITasks.EntityAITaskEntry) value;
